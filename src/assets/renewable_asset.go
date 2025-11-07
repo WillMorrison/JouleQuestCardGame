@@ -1,11 +1,10 @@
 package assets
 
-import "github.com/WillMorrison/JouleQuestCardGame/core"
-
-type RenewableAsset struct{}
+type RenewableAsset struct {
+	asset
+}
 
 var _ Asset = (*RenewableAsset)(nil)
 
-func (a RenewableAsset) Type() core.AssetType  { return core.AssetTypeRenewable }
-func (a RenewableAsset) GetPnL() core.PnLTable { return core.RenewablePnLTable }
-func (a *RenewableAsset) Reset()               {}
+func (a *RenewableAsset) SetMode(mode OperationMode) {}
+func (a *RenewableAsset) ClearMode()                 { a.operationMode = OperationMode(0) }

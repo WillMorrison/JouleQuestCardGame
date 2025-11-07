@@ -19,17 +19,17 @@ func (am *AssetMix) AddAsset(a Asset) {
 	case *RenewableAsset:
 		am.Renewables++
 	case *BatteryAsset:
-		switch asset.Mode {
-		case MarketModeCapacity:
+		switch asset.Mode() & OperationModeCapacity {
+		case OperationModeCapacity:
 			am.BatteriesCapacity++
-		case MarketModeArbitrage:
+		default:
 			am.BatteriesArbitrage++
 		}
 	case *FossilAsset:
-		switch asset.Mode {
-		case MarketModeCapacity:
+		switch asset.Mode() & OperationModeCapacity {
+		case OperationModeCapacity:
 			am.FossilsCapacity++
-		case MarketModeWholesale:
+		default:
 			am.FossilsWholesale++
 		}
 	}
