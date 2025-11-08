@@ -3,8 +3,10 @@
 package engine
 
 import (
+	"slices"
+
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
-	"github.com/WillMorrison/JouleQuestCardGame/core"
+	"github.com/WillMorrison/JouleQuestCardGame/params"
 )
 
 type ActionType int
@@ -16,7 +18,6 @@ const (
 	ActionTypeTakeoverAsset                        // Take over an existing asset from a bankrupt player and add it to player's portfolio
 	ActionTypeTakeoverScrapAsset                   // Scrap an asset from a bankrupt player's portfolio
 	ActionTypePledgeCapacity                       // Pledge an asset in the player's portfolio to the capacity market
-	ActionTypeBuyService                           // Buy a forecasting service for all of the player's battery assets
 	ActionTypeFinished                             // Indicate that the player is done with the build phase
 )
 
@@ -26,11 +27,9 @@ func (at ActionType) LogKey() string {
 
 type PlayerAction struct {
 	Type        ActionType
-	PlayerIndex int            // Index of the player performing the action
-	AssetType   core.AssetType // Type of asset involved in the action. Not relevant for ActionTypeFinished
-	Asset       assets.Asset   // Specific asset involved in the action. Nil for Build, BuyService, and Finished actions
-	Cost        int            // Cost of performing the action
-	// Todo: Figure out how to detect actions that are no longer valid
+	PlayerIndex int         // Index of the player performing the action
+	AssetType   assets.Type // Type of asset involved in the action. Not relevant for ActionTypeFinished
+	Cost        int         // Cost of performing the action
 }
 
 // Apply performs the described action, or returns an error (for example, it was only valid for a previous state)
@@ -43,6 +42,17 @@ func BuildPhase(gs *GameState) StateRunner {
 	logger.Event().With(GameLogEventStateMachineTransition).Log()
 
 	// Build phase logic would go here
+	numActivePlayers := len(gs.Players)
+	for {
+		if numActivePlayers == 0{
+			break
+		}
+		actions := gs.possibleActions()
+		if len(actions) == 0 {
+			//game loss, assets in takeover pool that nobody can afford to take over
+		}
+		// Get and apply player action from client
+	}
 
 	return OperatePhase
 }
@@ -53,26 +63,34 @@ func (gs *GameState) possibleActions() []PlayerAction {
 		if p.Status != PlayerStatusActive {
 			continue
 		}
-		am := p.getAssetMix()
-		if p.Money >= core.AssetTypeBattery.BuildCost() {
-			actions = append(actions, PlayerAction{Type: ActionTypeBuildAsset, PlayerIndex: pi, AssetType: core.AssetTypeBattery, Cost: core.AssetTypeBattery.BuildCost()})
+		playerAssetMix := p.getAssetMix()
+		takeoverAssetMix := assets.AssetMixFrom(slices.Values(gs.TakeoverPool))
+		for _, at := range assets.Types {
+			if cost := gs.Params.BuildCost(at); cost <= p.Money {
+				actions = append(actions, PlayerAction{Type: ActionTypeBuildAsset, PlayerIndex: pi, AssetType: at, Cost: cost})
+			}
+			if cost := gs.Params.ScrapCost(at); cost <= p.Money && playerAssetMix.AssetsOfType(at) > 0 {
+				actions = append(actions, PlayerAction{Type: ActionTypeScrapAsset, PlayerIndex: pi, AssetType: at, Cost: cost})
+			}
+			if cost := gs.Params.TakeoverCost(at); cost <= p.Money && takeoverAssetMix.AssetsOfType(at) > 0 {
+				actions = append(
+					actions,
+					PlayerAction{Type: ActionTypeTakeoverAsset, PlayerIndex: pi, AssetType: at, Cost: cost},
+					PlayerAction{Type: ActionTypeTakeoverScrapAsset, PlayerIndex: pi, AssetType: at, Cost: cost},
+				)
+			}
 		}
-		if p.Money >= core.AssetTypeRenewable.BuildCost() {
-			actions = append(actions, PlayerAction{Type: ActionTypeBuildAsset, PlayerIndex: pi, AssetType: core.AssetTypeRenewable, Cost: core.AssetTypeRenewable.BuildCost()})
+		if gs.Params.CapacityRule != params.CapacityRuleNoCapacityMarket {
+			if playerAssetMix.BatteriesArbitrage > 0 {
+				actions = append(actions, PlayerAction{Type: ActionTypePledgeCapacity, PlayerIndex: pi, AssetType: assets.TypeBattery})
+			}
+			if playerAssetMix.FossilsWholesale > 0 {
+				actions = append(actions, PlayerAction{Type: ActionTypePledgeCapacity, PlayerIndex: pi, AssetType: assets.TypeFossil})
+			}
 		}
-		if p.Money >= core.AssetTypeFossil.BuildCost() {
-			actions = append(actions, PlayerAction{Type: ActionTypeBuildAsset, PlayerIndex: pi, AssetType: core.AssetTypeFossil, Cost: core.AssetTypeFossil.BuildCost()})
+		if takeoverAssetMix.NumAssets() == 0 {
+			actions = append(actions, PlayerAction{Type: ActionTypeFinished, PlayerIndex: pi})
 		}
-		if am.BatteriesArbitrage+am.BatteriesCapacity > 0 && p.Money >= core.AssetTypeBattery.ScrapCost() {
-			actions = append(actions, PlayerAction{Type: ActionTypeScrapAsset, PlayerIndex: pi, AssetType: core.AssetTypeBattery, Cost: core.AssetTypeBattery.ScrapCost()})
-		}
-		if am.FossilsCapacity+am.FossilsWholesale > 0 && p.Money >= core.AssetTypeFossil.ScrapCost() {
-			actions = append(actions, PlayerAction{Type: ActionTypeScrapAsset, PlayerIndex: pi, AssetType: core.AssetTypeFossil, Cost: core.AssetTypeFossil.ScrapCost()})
-		}
-		if am.Renewables > 0 && p.Money >= core.AssetTypeRenewable.ScrapCost() {
-			actions = append(actions, PlayerAction{Type: ActionTypeScrapAsset, PlayerIndex: pi, AssetType: core.AssetTypeRenewable, Cost: core.AssetTypeRenewable.ScrapCost()})
-		}
-		// Todo: Takeover actions, capacity pledges, and service purchases, and Finished action if takeover pool is empty
 	}
 	return actions
 }

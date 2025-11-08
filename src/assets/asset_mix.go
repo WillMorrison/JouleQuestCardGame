@@ -2,6 +2,7 @@ package assets
 
 import (
 	"fmt"
+	"iter"
 	"strings"
 )
 
@@ -35,6 +36,23 @@ func (am *AssetMix) AddAsset(a Asset) {
 	}
 }
 
+func (am AssetMix) AssetsOfType(at Type) int {
+	switch at {
+	case TypeBattery:
+		return am.BatteriesArbitrage + am.BatteriesCapacity
+	case TypeRenewable:
+		return am.Renewables
+	case TypeFossil:
+		return am.FossilsWholesale + am.FossilsCapacity
+	default:
+		return 0
+	}
+}
+
+func (am AssetMix) NumAssets() int {
+	return am.Renewables + am.BatteriesArbitrage + am.BatteriesCapacity + am.FossilsWholesale + am.FossilsCapacity
+}
+
 func (am AssetMix) GenerationAssets() int {
 	return am.Renewables + am.FossilsWholesale + am.FossilsCapacity
 }
@@ -54,6 +72,14 @@ func (am AssetMix) RenewablePenetration() int {
 		return 0
 	}
 	return (am.Renewables * 100) / totalGen
+}
+
+// AssetMixFrom creates a new AssetMix from an Asset iterator
+func AssetMixFrom(it iter.Seq[Asset]) (am AssetMix) {
+	for a := range it {
+		am.AddAsset(a)
+	}
+	return
 }
 
 // Coefficients for summing (multiples of) asset types in calculations.

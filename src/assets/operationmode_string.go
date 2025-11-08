@@ -9,27 +9,16 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[OperationModeCapacity-1]
-	_ = x[OperationModeForecastingService-2]
-	_ = x[OperationModeApplyCarbonTax-4]
 }
 
-const (
-	_OperationMode_name_0 = "CapacityForecastingService"
-	_OperationMode_name_1 = "ApplyCarbonTax"
-)
+const _OperationMode_name = "Capacity"
 
-var (
-	_OperationMode_index_0 = [...]uint8{0, 8, 26}
-)
+var _OperationMode_index = [...]uint8{0, 8}
 
 func (i OperationMode) String() string {
-	switch {
-	case 1 <= i && i <= 2:
-		i -= 1
-		return _OperationMode_name_0[_OperationMode_index_0[i]:_OperationMode_index_0[i+1]]
-	case i == 4:
-		return _OperationMode_name_1
-	default:
+	idx := int(i) - 1
+	if i < 1 || idx >= len(_OperationMode_index)-1 {
 		return "OperationMode(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
+	return _OperationMode_name[_OperationMode_index[idx]:_OperationMode_index[idx+1]]
 }
