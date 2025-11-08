@@ -81,18 +81,16 @@ func OperatePhase(gs *GameState) StateRunner {
 		return RoundEnd
 	}
 
-	// Ensure all fossil assets have carbon tax applied if emissions exceed threshold
-	policy := gs.maybeApplyCarbonTaxToAllFossilAssets()
-	logger.Set(policy)
-	logger.Event().With(GameLogEventCarbonTaxApplied).Log()
-
 	// Do market PnL calculations for each player
 	for pi, p := range gs.Players {
 		pLogger := logger.Sub().SetKey("player_index", pi)
 		if p.Status == PlayerStatusActive {
-			playerPnL, playerAssetMix := p.getPnLAndAssetMix(gridOutcome.PriceVolatility)
+			var playerPnL int
+			for _, a := range p.Assets {
+				playerPnL += gs.Params.PnL(a, gridOutcome.PriceVolatility, gs.CarbonEmissions, am.CapacityAssets())
+			}
 			p.Money += playerPnL
-			pLogger.Event().WithKey("player_asset_mix", playerAssetMix).WithKey("player_PnL", playerPnL).WithKey("player_money", p.Money).With(GameLogEventMarketOutcome).Log()
+			pLogger.Event().WithKey("player_asset_mix", p.getAssetMix()).WithKey("player_PnL", playerPnL).WithKey("player_money", p.Money).With(GameLogEventMarketOutcome).Log()
 
 			// Check player loss conditions
 			if p.Money < 0 {

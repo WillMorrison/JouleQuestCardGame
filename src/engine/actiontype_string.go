@@ -13,13 +13,12 @@ func _() {
 	_ = x[ActionTypeTakeoverAsset-2]
 	_ = x[ActionTypeTakeoverScrapAsset-3]
 	_ = x[ActionTypePledgeCapacity-4]
-	_ = x[ActionTypeBuyService-5]
-	_ = x[ActionTypeFinished-6]
+	_ = x[ActionTypeFinished-5]
 }
 
-const _ActionType_name = "BuildAssetScrapAssetTakeoverAssetTakeoverScrapAssetPledgeCapacityBuyServiceFinished"
+const _ActionType_name = "BuildAssetScrapAssetTakeoverAssetTakeoverScrapAssetPledgeCapacityFinished"
 
-var _ActionType_index = [...]uint8{0, 10, 20, 33, 51, 65, 75, 83}
+var _ActionType_index = [...]uint8{0, 10, 20, 33, 51, 65, 73}
 
 func (i ActionType) String() string {
 	idx := int(i) - 0

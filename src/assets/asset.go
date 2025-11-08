@@ -14,14 +14,14 @@ func (at Type) LogKey() string {
 	return "asset_type"
 }
 
+var Types = [...]Type{TypeBattery, TypeRenewable, TypeFossil}
+
 // Operation mode is a bitfield indicating whether an asset is operating in a certain way.
 type OperationMode int
 
 //go:generate go tool stringer -type=OperationMode -trimprefix=OperationMode
 const (
 	OperationModeCapacity OperationMode = 1 << iota
-	OperationModeForecastingService
-	OperationModeApplyCarbonTax
 )
 
 func (mm OperationMode) LogKey() string {
@@ -44,3 +44,4 @@ type asset struct {
 
 func (a asset) Type() Type          { return a.assetType }
 func (a asset) Mode() OperationMode { return a.operationMode }
+func (a *asset) ClearMode()         { a.operationMode = OperationMode(0) }

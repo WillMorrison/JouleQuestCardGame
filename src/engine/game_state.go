@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
-	"github.com/WillMorrison/JouleQuestCardGame/core"
 	"github.com/WillMorrison/JouleQuestCardGame/eventlog"
+	"github.com/WillMorrison/JouleQuestCardGame/params"
 )
 
 type PlayerState struct {
@@ -21,18 +21,6 @@ func (ps PlayerState) getAssetMix() assets.AssetMix {
 		am.AddAsset(a)
 	}
 	return am
-}
-
-func (ps PlayerState) getPnLAndAssetMix(volatility core.PriceVolatility) (int, assets.AssetMix) {
-	var totalPnL int
-	var am assets.AssetMix
-	for _, a := range ps.Assets {
-		am.AddAsset(a)
-		pnlTable := a.GetPnL()
-		assetPnL := pnlTable[volatility]
-		totalPnL += assetPnL
-	}
-	return totalPnL, am
 }
 
 type playerStateJSON struct {
@@ -57,7 +45,7 @@ func (ps PlayerState) MarshalJSON() ([]byte, error) {
 // Returns whether the player owns any fossil assets
 func (ps PlayerState) HasFossilAssets() bool {
 	for _, a := range ps.Assets {
-		if a.Type() == core.AssetTypeFossil {
+		if a.Type() == assets.TypeFossil {
 			return true
 		}
 	}
@@ -67,15 +55,7 @@ func (ps PlayerState) HasFossilAssets() bool {
 // Resets all of the player's assets to their default operating mode
 func (ps *PlayerState) resetAllAssets() {
 	for _, a := range ps.Assets {
-		a.Reset()
-	}
-}
-
-func (ps *PlayerState) applyCarbonTaxToFossilAssets() {
-	for ai := range ps.Assets {
-		if fa, ok := (ps.Assets[ai]).(*assets.FossilAsset); ok {
-			fa.ApplyCarbonTax()
-		}
+		a.ClearMode()
 	}
 }
 
@@ -91,8 +71,10 @@ type GameState struct {
 	Round           int
 	CarbonEmissions int // Total carbon emissions in the world
 	Players         []PlayerState
-	TakeoverPool    []assets.Asset  // Assets available for takeover
-	Logger          eventlog.Logger `json:"-"`
+	TakeoverPool    []assets.Asset // Assets available for takeover
+
+	Params params.Params
+	Logger eventlog.Logger `json:"-"`
 }
 
 func (gs GameState) getAssetMix() assets.AssetMix {
@@ -115,14 +97,4 @@ func (gs *GameState) SetGlobalLossWithReason(reason LossCondition) {
 func (gs *GameState) movePlayerAssetsToTakeoverPool(pi int) {
 	gs.TakeoverPool = append(gs.TakeoverPool, gs.Players[pi].Assets...)
 	gs.Players[pi].Assets = nil
-}
-
-func (gs *GameState) maybeApplyCarbonTaxToAllFossilAssets() assets.Policy {
-	if gs.CarbonEmissions > core.CarbonTaxThreshold {
-		for pi := range gs.Players {
-			gs.Players[pi].applyCarbonTaxToFossilAssets()
-		}
-		return assets.PolicyCarbonTax
-	}
-	return assets.PolicyNone
 }
