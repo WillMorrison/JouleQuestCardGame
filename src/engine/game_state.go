@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
+	"github.com/WillMorrison/JouleQuestCardGame/core"
 	"github.com/WillMorrison/JouleQuestCardGame/eventlog"
 	"github.com/WillMorrison/JouleQuestCardGame/params"
 )
@@ -65,6 +66,13 @@ func (ps *PlayerState) SetLossWithReason(reason LossCondition) {
 	ps.Reason = reason
 }
 
+// Snapshot holds summary statistics from the outcome of an Operate phase
+type Snapshot struct {
+	AssetMix        assets.AssetMix
+	PriceVolatility core.PriceVolatility
+	GridStability   core.GridStability
+}
+
 type GameState struct {
 	Status          GameStatus
 	Reason          LossCondition `json:",omitzero"` // Reason for global loss, if applicable
@@ -72,6 +80,8 @@ type GameState struct {
 	CarbonEmissions int // Total carbon emissions in the world
 	Players         []PlayerState
 	TakeoverPool    []assets.Asset // Assets available for takeover
+
+	LastSnapshot Snapshot // Summary of the previous round's Operate phase
 
 	Params params.Params
 	Logger eventlog.Logger `json:"-"`

@@ -7,13 +7,8 @@ import (
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
 	"github.com/WillMorrison/JouleQuestCardGame/core"
+	"github.com/WillMorrison/JouleQuestCardGame/params"
 )
-
-// operationOutcome represents the calculations of the Operate phase.
-type operationOutcome struct {
-	PriceVolatility core.PriceVolatility
-	GridStability   core.GridStability
-}
 
 var priceVolatilityCalculation = assets.RatioCalculation{
 	CoefficientsA: assets.AssetMixCoefficients{FossilsWholesale: 1, BatteriesArbitrage: 1},
@@ -43,6 +38,17 @@ var gridStabilityMap = [4]core.GridStability{
 	core.GridStabilityDangerous,
 }
 
+// generationConstraintMet returns whether the number of generating assets meet the requirements for the rule
+func (gs GameState) generationConstraintMet(am assets.AssetMix) bool {
+	switch gs.Params.GenerationConstraintRule {
+	case params.GenerationConstraintRuleMinimum:
+		return am.GenerationAssets() >= gs.Params.GenerationConstraint
+	case params.GenerationConstraintRuleMaxDecrease:
+		return (gs.LastSnapshot.AssetMix.GenerationAssets() - am.GenerationAssets()) >= -gs.Params.GenerationConstraint
+	}
+	return false
+}
+
 func OperatePhase(gs *GameState) StateRunner {
 	logger := gs.Logger.Sub().Set(StateMachineStateOperatePhase)
 	logger.Event().With(GameLogEventStateMachineTransition).Log()
@@ -53,18 +59,18 @@ func OperatePhase(gs *GameState) StateRunner {
 
 	// Calculate asset mix, price volatility, grid stability, and new emissions
 	am := gs.getAssetMix()
-	gridOutcome := operationOutcome{
+	gridOutcome := Snapshot{
+		AssetMix:        am,
 		PriceVolatility: assets.MapRatioTo(priceVolatilityCalculation, am, priceVolatilityMap),
 		GridStability:   assets.MapRatioTo(gridStabilityCalculation, am, gridStabilityMap),
 	}
 	logger.Event().
-		WithKey("asset_mix", am).
 		WithKey("grid_outcome", gridOutcome).
 		WithKey("new_emissions", am.Emissions()).
 		With(GameLogEventGridOutcome).Log()
 
 	// Check global loss conditions
-	if am.GenerationAssets() < core.MinimumGenerationAssets {
+	if gs.generationConstraintMet(am) {
 		gs.SetGlobalLossWithReason(LossConditionInsufficientGeneration)
 		logger.Event().With(GameLogEventEveryoneLoses, gs.Reason).WithKey("generation_assets", am.GenerationAssets()).Log()
 		return RoundEnd
@@ -75,7 +81,7 @@ func OperatePhase(gs *GameState) StateRunner {
 		return RoundEnd
 	}
 	gs.CarbonEmissions += am.Emissions()
-	if gs.CarbonEmissions > core.EmissionsCap {
+	if gs.CarbonEmissions > gs.Params.EmissionsCap {
 		gs.SetGlobalLossWithReason(LossConditionCarbonEmissionsExceeded)
 		logger.Event().With(GameLogEventEveryoneLoses, gs.Reason).WithKey("total_emissions", gs.CarbonEmissions).WithKey("new_emissions", am.Emissions()).Log()
 		return RoundEnd
@@ -100,6 +106,8 @@ func OperatePhase(gs *GameState) StateRunner {
 			}
 		}
 	}
+
+	gs.LastSnapshot = gridOutcome
 
 	return RoundEnd
 }

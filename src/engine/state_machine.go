@@ -4,12 +4,12 @@ import (
 	"fmt"
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
-	"github.com/WillMorrison/JouleQuestCardGame/core"
 	"github.com/WillMorrison/JouleQuestCardGame/eventlog"
+	"github.com/WillMorrison/JouleQuestCardGame/params"
 )
 
-func NewGame(numPlayers int, logger eventlog.Logger) (*GameState, error) {
-	initialAssetsPerPlayer, ok := core.StartingFossilAssetsPerPlayer[numPlayers]
+func NewGame(numPlayers int, gameParams params.Params, logger eventlog.Logger) (*GameState, error) {
+	initialAssetsPerPlayer, ok := gameParams.StartingFossilAssetsPerPlayer[numPlayers]
 	if !ok {
 		return nil, fmt.Errorf("invalid number of players: %d", numPlayers)
 	}
@@ -18,12 +18,13 @@ func NewGame(numPlayers int, logger eventlog.Logger) (*GameState, error) {
 		Status:          GameStatusOngoing,
 		Round:           1,
 		CarbonEmissions: 0,
+		Params:          gameParams,
 		Logger:          logger,
 	}
 
 	for range numPlayers {
 		p := PlayerState{
-			Money:  core.InitialCash,
+			Money:  gameParams.InitialCash,
 			Status: PlayerStatusActive,
 		}
 		for range initialAssetsPerPlayer {
@@ -31,6 +32,14 @@ func NewGame(numPlayers int, logger eventlog.Logger) (*GameState, error) {
 		}
 		game.Players = append(game.Players, p)
 	}
+
+	am := game.getAssetMix()
+	game.LastSnapshot = Snapshot{
+		AssetMix:        am,
+		PriceVolatility: assets.MapRatioTo(priceVolatilityCalculation, am, priceVolatilityMap),
+		GridStability:   assets.MapRatioTo(gridStabilityCalculation, am, gridStabilityMap),
+	}
+
 	return &game, nil
 }
 
@@ -44,33 +53,9 @@ func (gs *GameState) Run() {
 }
 
 func GameStart(gs *GameState) StateRunner {
-	params := map[string]any{
-		"initial_cash":                      core.InitialCash,
-		"starting_fossil_assets_per_player": core.StartingFossilAssetsPerPlayer,
-		"minimum_generation_assets":         core.MinimumGenerationAssets,
-		"emissions_cap":                     core.EmissionsCap,
-		"fossil_build_cost":                 core.FossilBuildCost,
-		"fossil_scrap_cost":                 core.FossilScrapCost,
-		"renewable_build_cost":              core.RenewableBuildCost,
-		"renewable_scrap_cost":              core.RenewableScrapCost,
-		"battery_build_cost":                core.BatteryBuildCost,
-		"battery_scrap_cost":                core.BatteryScrapCost,
-		"pnl_tables": map[string]core.PnLTable{
-			"fossil_wholesale":                 core.FossilPnLTable,
-			"fossil_capacity":                  core.CapacityPnLTable,
-			"fossil_wholesale_with_carbon_tax": core.FossilPnLTableWithCarbonTax,
-			"fossil_capacity_with_carbon_tax":  core.FossilCapacityPnLTableWithCarbonTax,
-			"renewable":                        core.RenewablePnLTable,
-			"battery_arbitrage_with_service":   core.BatteryPnLTableWithService,
-			"battery_arbitrage":                core.BatteryPnLTable,
-			"battery_capacity":                 core.CapacityPnLTable,
-		},
-		"price_volatility_calculation": priceVolatilityCalculation.String(),
-		"grid_stability_calculation":   gridStabilityCalculation.String(),
-	}
 	gs.Logger.Event().
 		With(GameLogEventStateMachineTransition, StateMachineStateGameStart).
-		WithKey("game_parameters", params).
+		WithKey("game_parameters", gs.Params).
 		WithKey("num_players", len(gs.Players)).
 		Log()
 	return RoundStart
