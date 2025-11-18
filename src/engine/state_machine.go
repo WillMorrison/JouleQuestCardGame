@@ -8,7 +8,7 @@ import (
 	"github.com/WillMorrison/JouleQuestCardGame/params"
 )
 
-func NewGame(numPlayers int, gameParams params.Params, logger eventlog.Logger) (*GameState, error) {
+func NewGame(numPlayers int, gameParams params.Params, logger eventlog.Logger, getAction GetPlayerAction) (*GameState, error) {
 	initialAssetsPerPlayer, ok := gameParams.StartingFossilAssetsPerPlayer[numPlayers]
 	if !ok {
 		return nil, fmt.Errorf("invalid number of players: %d", numPlayers)
@@ -20,6 +20,7 @@ func NewGame(numPlayers int, gameParams params.Params, logger eventlog.Logger) (
 		CarbonEmissions: 0,
 		Params:          gameParams,
 		Logger:          logger,
+		GetPlayerAction: getAction,
 	}
 
 	for range numPlayers {

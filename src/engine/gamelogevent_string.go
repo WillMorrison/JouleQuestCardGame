@@ -9,24 +9,20 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[GameLogEventStateMachineTransition-0]
-	_ = x[GameLogEventPlayerBuildAsset-1]
-	_ = x[GameLogEventPlayerTakeoverAsset-2]
-	_ = x[GameLogEventPlayerScrapAsset-3]
-	_ = x[GameLogEventPlayerPledgeCapacity-4]
-	_ = x[GameLogEventPlayerBuyService-5]
-	_ = x[GameLogEventPlayerDoneBuildPhase-6]
-	_ = x[GameLogEventEventDrawn-7]
-	_ = x[GameLogEventGridOutcome-8]
-	_ = x[GameLogEventMarketOutcome-9]
-	_ = x[GameLogEventCarbonTaxApplied-10]
-	_ = x[GameLogEventPlayerLoses-11]
-	_ = x[GameLogEventEveryoneLoses-12]
-	_ = x[GameLogEventGlobalWin-13]
+	_ = x[GameLogEventPlayerAction-1]
+	_ = x[GameLogEventPlayerActionInvalid-2]
+	_ = x[GameLogEventEventDrawn-3]
+	_ = x[GameLogEventGridOutcome-4]
+	_ = x[GameLogEventMarketOutcome-5]
+	_ = x[GameLogEventCarbonTaxApplied-6]
+	_ = x[GameLogEventPlayerLoses-7]
+	_ = x[GameLogEventEveryoneLoses-8]
+	_ = x[GameLogEventGlobalWin-9]
 }
 
-const _GameLogEvent_name = "StateMachineTransitionPlayerBuildAssetPlayerTakeoverAssetPlayerScrapAssetPlayerPledgeCapacityPlayerBuyServicePlayerDoneBuildPhaseEventDrawnGridOutcomeMarketOutcomeCarbonTaxAppliedPlayerLosesEveryoneLosesGlobalWin"
+const _GameLogEvent_name = "StateMachineTransitionPlayerActionPlayeractionInvalidEventDrawnGridOutcomeMarketOutcomeCarbonTaxAppliedPlayerLosesEveryoneLosesGlobalWin"
 
-var _GameLogEvent_index = [...]uint8{0, 22, 38, 57, 73, 93, 109, 129, 139, 150, 163, 179, 190, 203, 212}
+var _GameLogEvent_index = [...]uint8{0, 22, 34, 53, 63, 74, 87, 103, 114, 127, 136}
 
 func (i GameLogEvent) String() string {
 	idx := int(i) - 0

@@ -14,6 +14,8 @@ type PlayerState struct {
 	Reason LossCondition  // Reason for player loss, if applicable
 	Money  int            // Player's current money
 	Assets []assets.Asset // Player's owned assets
+
+	isBuilding bool // Internal tracker of whether the player has finished the build round
 }
 
 func (ps PlayerState) getAssetMix() assets.AssetMix {
@@ -85,6 +87,7 @@ type GameState struct {
 
 	Params params.Params
 	Logger eventlog.Logger `json:"-"`
+	GetPlayerAction GetPlayerAction // callback when the game needs to pick the next player action
 }
 
 func (gs GameState) getAssetMix() assets.AssetMix {

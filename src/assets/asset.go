@@ -45,3 +45,15 @@ type asset struct {
 func (a asset) Type() Type          { return a.assetType }
 func (a asset) Mode() OperationMode { return a.operationMode }
 func (a *asset) ClearMode()         { a.operationMode = OperationMode(0) }
+
+func New(t Type) Asset {
+	switch t{
+	case TypeBattery:
+		return &BatteryAsset{}
+	case TypeFossil:
+		return &FossilAsset{}
+	case TypeRenewable:
+		return &RenewableAsset{}
+	}
+	return nil
+}

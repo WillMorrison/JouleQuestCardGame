@@ -30,12 +30,8 @@ const (
 	GameLogEventStateMachineTransition GameLogEvent = iota
 
 	// Build Phase player actions
-	GameLogEventPlayerBuildAsset
-	GameLogEventPlayerTakeoverAsset
-	GameLogEventPlayerScrapAsset
-	GameLogEventPlayerPledgeCapacity
-	GameLogEventPlayerBuyService
-	GameLogEventPlayerDoneBuildPhase
+	GameLogEventPlayerAction
+	GameLogEventPlayerActionInvalid
 
 	// Operate Phase events
 	GameLogEventEventDrawn

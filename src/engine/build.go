@@ -3,6 +3,7 @@
 package engine
 
 import (
+	"fmt"
 	"slices"
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
@@ -32,35 +33,62 @@ type PlayerAction struct {
 	Cost        int         // Cost of performing the action
 }
 
-// Apply performs the described action, or returns an error (for example, it was only valid for a previous state)
-func (pa PlayerAction) Apply() error {
-	return nil
-}
+// GetPlayerAction is a type that clients must implement to input player actions to the state machine
+type GetPlayerAction func([]PlayerAction) PlayerAction
 
+// BuildPhase implements the build phase using the GetPlayerAction callback to get the next player action.
 func BuildPhase(gs *GameState) StateRunner {
 	logger := gs.Logger.Sub().Set(StateMachineStateBuildPhase)
 	logger.Event().With(GameLogEventStateMachineTransition).Log()
 
-	// Build phase logic would go here
-	numActivePlayers := len(gs.Players)
+	var numActivePlayers int
+	for i, p := range gs.Players {
+		if p.Status == PlayerStatusActive {
+			numActivePlayers++
+			gs.Players[i].isBuilding = true
+		}
+	}
 	for {
-		if numActivePlayers == 0{
+		if numActivePlayers == 0 {
 			break
 		}
 		actions := gs.possibleActions()
 		if len(actions) == 0 {
 			//game loss, assets in takeover pool that nobody can afford to take over
+			gs.SetGlobalLossWithReason(LossConditionUnownedTakeoverAssets)
+			takeoverMix := assets.AssetMixFrom(slices.Values(gs.TakeoverPool))
+			var money []int
+			for _, p := range gs.Players {
+				money = append(money, p.Money)
+			}
+			logger.Event().With(GameLogEventEveryoneLoses, gs.Reason).WithKey("takeover_pool", takeoverMix).WithKey("player_funds", money).Log()
+			return RoundEnd
 		}
 		// Get and apply player action from client
+		chosenAction := gs.GetPlayerAction(actions)
+		err := gs.applyPlayerAction(chosenAction)
+		if err != nil {
+			logger.Event().With(GameLogEventPlayerActionInvalid).WithKey("invalid_action", chosenAction).WithKey("error", err.Error()).Log()
+			continue
+		} else {
+			logger.Event().With(GameLogEventPlayerAction).WithKey("action", chosenAction).Log()
+		}
+		if chosenAction.Type == ActionTypeFinished {
+			numActivePlayers -= 1
+		}
 	}
 
 	return OperatePhase
 }
 
+// possibleActions returns a slice of build phase player actions that are possible
 func (gs *GameState) possibleActions() []PlayerAction {
 	var actions []PlayerAction
 	for pi, p := range gs.Players {
 		if p.Status != PlayerStatusActive {
+			continue
+		}
+		if !p.isBuilding {
 			continue
 		}
 		playerAssetMix := p.getAssetMix()
@@ -93,4 +121,49 @@ func (gs *GameState) possibleActions() []PlayerAction {
 		}
 	}
 	return actions
+}
+
+// applyPlayerAction performs the described action, or returns an error
+func (gs *GameState) applyPlayerAction(pa PlayerAction) error {
+	if !slices.Contains(gs.possibleActions(), pa) {
+		return fmt.Errorf("%+v is not on the list of possible actions", pa)
+	}
+
+	var player *PlayerState = &(gs.Players[pa.PlayerIndex])
+	firstAssetOfActionType := func(a assets.Asset) bool { return a.Type() == pa.AssetType }
+	switch pa.Type {
+	case ActionTypeFinished:
+		player.isBuilding = false
+	case ActionTypeBuildAsset:
+		player.Assets = append(player.Assets, assets.New(pa.AssetType))
+	case ActionTypeScrapAsset:
+		ai := slices.IndexFunc(player.Assets, firstAssetOfActionType)
+		if ai == -1 {
+			return fmt.Errorf("PlayerIndex %d has no assets of type %s to scrap", pa.PlayerIndex, pa.AssetType.String())
+		}
+		player.Assets = slices.Delete(player.Assets, ai, ai+1)
+	case ActionTypeTakeoverAsset:
+		ai := slices.IndexFunc(gs.TakeoverPool, firstAssetOfActionType)
+		if ai == -1 {
+			return fmt.Errorf("takeover pool has no assets of type %s", pa.AssetType.String())
+		}
+		gs.TakeoverPool = slices.Delete(gs.TakeoverPool, ai, ai+1)
+		player.Assets = append(player.Assets, assets.New(pa.AssetType))
+	case ActionTypeTakeoverScrapAsset:
+		ai := slices.IndexFunc(gs.TakeoverPool, firstAssetOfActionType)
+		if ai == -1 {
+			return fmt.Errorf("takeover pool has no assets of type %s", pa.AssetType.String())
+		}
+		gs.TakeoverPool = slices.Delete(gs.TakeoverPool, ai, ai+1)
+	case ActionTypePledgeCapacity:
+		ai := slices.IndexFunc(player.Assets, func(a assets.Asset) bool {
+			return a.Type() == pa.AssetType && (a.Mode()&assets.OperationModeCapacity != 0)
+		})
+		if ai == -1 {
+			return fmt.Errorf("PlayerIndex %d has no assets of type %s to pledge", pa.PlayerIndex, pa.AssetType.String())
+		}
+		player.Assets[ai].SetMode(assets.OperationModeCapacity)
+	}
+	player.Money -= pa.Cost
+	return nil
 }
