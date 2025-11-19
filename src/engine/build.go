@@ -157,7 +157,7 @@ func (gs *GameState) applyPlayerAction(pa PlayerAction) error {
 		gs.TakeoverPool = slices.Delete(gs.TakeoverPool, ai, ai+1)
 	case ActionTypePledgeCapacity:
 		ai := slices.IndexFunc(player.Assets, func(a assets.Asset) bool {
-			return a.Type() == pa.AssetType && (a.Mode()&assets.OperationModeCapacity != 0)
+			return a.Type() == pa.AssetType && (a.Mode()&assets.OperationModeCapacity == 0)
 		})
 		if ai == -1 {
 			return fmt.Errorf("PlayerIndex %d has no assets of type %s to pledge", pa.PlayerIndex, pa.AssetType.String())

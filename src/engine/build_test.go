@@ -382,3 +382,248 @@ func Test_GameState_possibleActions_MultiplePlayers(t *testing.T) {
 		t.Errorf("possibleActions() = %+v, want %+v", got, want)
 	}
 }
+
+func Test_GameState_applyPlayerAction_Impossible(t *testing.T) {
+	gameState := GameState{
+		Players: []PlayerState{
+			{
+				Status:     PlayerStatusActive,
+				isBuilding: true,
+				Money:      10,
+				Assets:     nil,
+			},
+		},
+		Params:       params.BuilderFrom(params.Default).RenewableCosts(50, 40).FossilCosts(50, 40).BatteryCosts(50, 40).Build(),
+		TakeoverPool: nil,
+	}
+	err := gameState.applyPlayerAction(PlayerAction{
+		Type:        ActionTypeBuildAsset,
+		PlayerIndex: 0,
+		AssetType:   assets.TypeBattery,
+		Cost:        10,
+	})
+	if err == nil {
+		t.Error("Expected error for impossible action, got nil")
+	}
+}
+
+func Test_GameState_applyPlayerAction_Finished(t *testing.T) {
+	gameState := GameState{
+		Players: []PlayerState{
+			{
+				Status:     PlayerStatusActive,
+				isBuilding: true,
+				Money:      10,
+				Assets:     nil,
+			},
+		},
+		Params:       params.Default,
+		TakeoverPool: nil,
+	}
+	action := PlayerAction{
+		Type:        ActionTypeFinished,
+		PlayerIndex: 0,
+	}
+
+	err := gameState.applyPlayerAction(action)
+	if err != nil {
+		t.Fatalf("%+v.applyPlayerAction(%+v) = %s, want no error", gameState, action, err)
+	}
+
+	if gameState.Players[0].isBuilding {
+		t.Errorf("Expected player isBuilding state to be false afer %s action", action.Type.String())
+	}
+}
+
+func Test_GameState_applyPlayerAction_Build(t *testing.T) {
+	gameState := GameState{
+		Players: []PlayerState{
+			{
+				Status:     PlayerStatusActive,
+				isBuilding: true,
+				Money:      60,
+				Assets:     nil,
+			},
+		},
+		Params:       params.BuilderFrom(params.Default).BatteryCosts(50, 40).Build(),
+		TakeoverPool: nil,
+	}
+	action := PlayerAction{
+		Type:        ActionTypeBuildAsset,
+		PlayerIndex: 0,
+		AssetType:   assets.TypeBattery,
+		Cost:        50,
+	}
+
+	err := gameState.applyPlayerAction(action)
+	if err != nil {
+		t.Fatalf("%+v.applyPlayerAction(%+v) = %s, want no error", gameState, action, err)
+	}
+
+	gotMoney := gameState.Players[0].Money
+	wantMoney := 10
+	if gotMoney != wantMoney {
+		t.Errorf("Money = %d, want %d after %s action", gotMoney, wantMoney, action.Type.String())
+	}
+	gotMix := gameState.Players[0].getAssetMix()
+	wantMix := assets.AssetMix{BatteriesArbitrage: 1}
+	if gotMix != wantMix {
+		t.Errorf("AssetMix = %+v, want %+v after %s action", gotMix, wantMix, action.Type.String())
+	}
+}
+
+func Test_GameState_applyPlayerAction_Scrap(t *testing.T) {
+	gameState := GameState{
+		Players: []PlayerState{
+			{
+				Status:     PlayerStatusActive,
+				isBuilding: true,
+				Money:      60,
+				Assets:     makeAssets(assets.AssetMix{BatteriesCapacity: 1, FossilsWholesale: 1}),
+			},
+		},
+		Params:       params.BuilderFrom(params.Default).BatteryCosts(50, 40).Build(),
+		TakeoverPool: nil,
+	}
+	action := PlayerAction{
+		Type:        ActionTypeScrapAsset,
+		PlayerIndex: 0,
+		AssetType:   assets.TypeBattery,
+		Cost:        40,
+	}
+
+	err := gameState.applyPlayerAction(action)
+	if err != nil {
+		t.Fatalf("%+v.applyPlayerAction(%+v) = %s, want no error", gameState, action, err)
+	}
+
+	gotMoney := gameState.Players[0].Money
+	wantMoney := 20
+	if gotMoney != wantMoney {
+		t.Errorf("Money = %d, want %d after %s action", gotMoney, wantMoney, action.Type.String())
+	}
+	gotMix := gameState.Players[0].getAssetMix()
+	wantMix := assets.AssetMix{FossilsWholesale: 1}
+	if gotMix != wantMix {
+		t.Errorf("AssetMix = %+v, want %+v after %s action", gotMix, wantMix, action.Type.String())
+	}
+}
+
+func Test_GameState_applyPlayerAction_Takeover(t *testing.T) {
+	gameState := GameState{
+		Players: []PlayerState{
+			{
+				Status:     PlayerStatusActive,
+				isBuilding: true,
+				Money:      60,
+				Assets:     nil,
+			},
+		},
+		Params:       params.BuilderFrom(params.Default).BatteryCosts(50, 40).Build(),
+		TakeoverPool: makeAssets(assets.AssetMix{BatteriesCapacity: 1, FossilsWholesale: 1}),
+	}
+	action := PlayerAction{
+		Type:        ActionTypeTakeoverAsset,
+		PlayerIndex: 0,
+		AssetType:   assets.TypeBattery,
+		Cost:        40,
+	}
+
+	err := gameState.applyPlayerAction(action)
+	if err != nil {
+		t.Fatalf("%+v.applyPlayerAction(%+v) = %s, want no error", gameState, action, err)
+	}
+
+	gotMoney := gameState.Players[0].Money
+	wantMoney := 20
+	if gotMoney != wantMoney {
+		t.Errorf("Money = %d, want %d after %s action", gotMoney, wantMoney, action.Type.String())
+	}
+	gotMix := gameState.Players[0].getAssetMix()
+	wantMix := assets.AssetMix{BatteriesArbitrage: 1}
+	if gotMix != wantMix {
+		t.Errorf("Player AssetMix = %+v, want %+v after %s action", gotMix, wantMix, action.Type.String())
+	}
+	gotMix = assets.AssetMixFrom(slices.Values(gameState.TakeoverPool))
+	wantMix = assets.AssetMix{FossilsWholesale: 1}
+	if gotMix != wantMix {
+		t.Errorf("Takeover AssetMix = %+v, want %+v after %s action", gotMix, wantMix, action.Type.String())
+	}
+}
+
+func Test_GameState_applyPlayerAction_TakeoverScrap(t *testing.T) {
+	gameState := GameState{
+		Players: []PlayerState{
+			{
+				Status:     PlayerStatusActive,
+				isBuilding: true,
+				Money:      60,
+				Assets:     nil,
+			},
+		},
+		Params:       params.BuilderFrom(params.Default).FossilCosts(50, 40).Build(),
+		TakeoverPool: makeAssets(assets.AssetMix{BatteriesCapacity: 1, FossilsWholesale: 2}),
+	}
+	action := PlayerAction{
+		Type:        ActionTypeTakeoverScrapAsset,
+		PlayerIndex: 0,
+		AssetType:   assets.TypeFossil,
+		Cost:        40,
+	}
+
+	err := gameState.applyPlayerAction(action)
+	if err != nil {
+		t.Fatalf("%+v.applyPlayerAction(%+v) = %s, want no error", gameState, action, err)
+	}
+
+	gotMoney := gameState.Players[0].Money
+	wantMoney := 20
+	if gotMoney != wantMoney {
+		t.Errorf("Money = %d, want %d after %s action", gotMoney, wantMoney, action.Type.String())
+	}
+	if len(gameState.Players[0].Assets) != 0 {
+		t.Errorf("Player had %d assets, want 0 after %s action", len(gameState.Players[0].Assets), action.Type.String())
+	}
+	gotMix := assets.AssetMixFrom(slices.Values(gameState.TakeoverPool))
+	wantMix := assets.AssetMix{BatteriesCapacity: 1, FossilsWholesale: 1}
+	if gotMix != wantMix {
+		t.Errorf("Takeover AssetMix = %+v, want %+v after %s action", gotMix, wantMix, action.Type.String())
+	}
+}
+
+func Test_GameState_applyPlayerAction_Pledge(t *testing.T) {
+	gameState := GameState{
+		Players: []PlayerState{
+			{
+				Status:     PlayerStatusActive,
+				isBuilding: true,
+				Money:      60,
+				Assets:     makeAssets(assets.AssetMix{BatteriesCapacity: 1, BatteriesArbitrage: 2}),
+			},
+		},
+		Params:       params.Default,
+		TakeoverPool: nil,
+	}
+	action := PlayerAction{
+		Type:        ActionTypePledgeCapacity,
+		PlayerIndex: 0,
+		AssetType:   assets.TypeBattery,
+		Cost:        0,
+	}
+
+	err := gameState.applyPlayerAction(action)
+	if err != nil {
+		t.Fatalf("%+v.applyPlayerAction(%+v) = %s, want no error", gameState, action, err)
+	}
+
+	gotMoney := gameState.Players[0].Money
+	wantMoney := 60
+	if gotMoney != wantMoney {
+		t.Errorf("Money = %d, want %d after %s action", gotMoney, wantMoney, action.Type.String())
+	}
+	gotMix := gameState.Players[0].getAssetMix()
+	wantMix := assets.AssetMix{BatteriesArbitrage: 1, BatteriesCapacity: 2}
+	if gotMix != wantMix {
+		t.Errorf("AssetMix = %+v, want %+v after %s action", gotMix, wantMix, action.Type.String())
+	}
+}

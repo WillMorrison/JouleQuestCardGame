@@ -49,11 +49,11 @@ func (a *asset) ClearMode()         { a.operationMode = OperationMode(0) }
 func New(t Type) Asset {
 	switch t{
 	case TypeBattery:
-		return &BatteryAsset{}
+		return &BatteryAsset{asset: asset{assetType: TypeBattery}}
 	case TypeFossil:
-		return &FossilAsset{}
+		return &FossilAsset{asset: asset{assetType: TypeFossil}}
 	case TypeRenewable:
-		return &RenewableAsset{}
+		return &RenewableAsset{asset: asset{assetType: TypeRenewable}}
 	}
 	return nil
 }
