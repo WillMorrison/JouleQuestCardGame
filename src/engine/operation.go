@@ -100,7 +100,7 @@ func OperatePhase(gs *GameState) StateRunner {
 		With(GameLogEventGridOutcome).Log()
 
 	// Check global loss conditions
-	if gs.generationConstraintMet(gridOutcome.AssetMix) {
+	if !gs.generationConstraintMet(gridOutcome.AssetMix) {
 		gs.SetGlobalLossWithReason(LossConditionInsufficientGeneration)
 		logger.Event().With(GameLogEventEveryoneLoses, gs.Reason).WithKey("generation_assets", gridOutcome.AssetMix.GenerationAssets()).Log()
 		return GameEnd
