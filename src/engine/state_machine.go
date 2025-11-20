@@ -16,7 +16,7 @@ func NewGame(numPlayers int, gameParams params.Params, logger eventlog.Logger, g
 
 	var game = GameState{
 		Status:          GameStatusOngoing,
-		Round:           1,
+		Round:           0,
 		CarbonEmissions: 0,
 		Params:          gameParams,
 		Logger:          logger,
@@ -59,34 +59,13 @@ func GameStart(gs *GameState) StateRunner {
 		WithKey("game_parameters", gs.Params).
 		WithKey("num_players", len(gs.Players)).
 		Log()
-	return RoundStart
-}
-
-func RoundStart(gs *GameState) StateRunner {
-	gs.Logger = gs.Logger.SetKey("round", gs.Round) // Always add round info to game event logs
-	logger := gs.Logger.Sub().Set(StateMachineStateRoundStart)
-	logger.Event().With(GameLogEventStateMachineTransition).Log()
-	for pi, p := range gs.Players {
-		p.resetAllAssets()
-
-		// Check for players who have lost and put their assets into the takeover pool
-		if p.Status != PlayerStatusActive && len(p.Assets) > 0 {
-			gs.TakeoverPool = append(gs.TakeoverPool, p.Assets...)
-			gs.Players[pi].Assets = nil
-		}
-	}
-	// Todo: Log game state snapshot?
 	return BuildPhase
 }
 
+// RoundEnd checks whether the win condition is met after an Operate round
 func RoundEnd(gs *GameState) StateRunner {
 	logger := gs.Logger.Sub().Set(StateMachineStateRoundEnd)
 	logger.Event().With(GameLogEventStateMachineTransition).Log()
-
-	// Game ended in some earlier state, pass through
-	if gs.Status != GameStatusOngoing {
-		return GameEnd
-	}
 
 	// Check for loss condition: last player with fossil assets, or all players lost
 	var lastFossilPlayerIndex int = -1
@@ -104,8 +83,7 @@ func RoundEnd(gs *GameState) StateRunner {
 
 	// If the end-game condition is not satisfied yet, start another round
 	if fossilPlayerCount > 1 && activePlayerCount > 0 {
-		gs.Round++
-		return RoundStart
+		return BuildPhase
 	}
 
 	// Handle the game end trigger: only one player left has fossil assets

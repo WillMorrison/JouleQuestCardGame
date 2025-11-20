@@ -38,6 +38,8 @@ type GetPlayerAction func([]PlayerAction) PlayerAction
 
 // BuildPhase implements the build phase using the GetPlayerAction callback to get the next player action.
 func BuildPhase(gs *GameState) StateRunner {
+	gs.Round++
+	gs.Logger = gs.Logger.SetKey("round", gs.Round) // Always add round info to game event logs
 	logger := gs.Logger.Sub().Set(StateMachineStateBuildPhase)
 	logger.Event().With(GameLogEventStateMachineTransition).Log()
 
@@ -46,6 +48,7 @@ func BuildPhase(gs *GameState) StateRunner {
 		if p.Status == PlayerStatusActive {
 			numActivePlayers++
 			gs.Players[i].isBuilding = true
+			gs.Players[i].resetAllAssets()
 		}
 	}
 	for {
@@ -62,7 +65,7 @@ func BuildPhase(gs *GameState) StateRunner {
 				money = append(money, p.Money)
 			}
 			logger.Event().With(GameLogEventEveryoneLoses, gs.Reason).WithKey("takeover_pool", takeoverMix).WithKey("player_funds", money).Log()
-			return RoundEnd
+			return GameEnd
 		}
 		// Get and apply player action from client
 		chosenAction := gs.GetPlayerAction(actions)

@@ -20,7 +20,7 @@ func _() {
 	_ = x[GameLogEventGlobalWin-9]
 }
 
-const _GameLogEvent_name = "StateMachineTransitionPlayerActionPlayeractionInvalidEventDrawnGridOutcomeMarketOutcomeCarbonTaxAppliedPlayerLosesEveryoneLosesGlobalWin"
+const _GameLogEvent_name = "StateMachineTransitionPlayerActionPlayerActionInvalidEventDrawnGridOutcomeMarketOutcomeCarbonTaxAppliedPlayerLosesEveryoneLosesGlobalWin"
 
 var _GameLogEvent_index = [...]uint8{0, 22, 34, 53, 63, 74, 87, 103, 114, 127, 136}
 

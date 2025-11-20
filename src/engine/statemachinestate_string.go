@@ -9,16 +9,15 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[StateMachineStateGameStart-0]
-	_ = x[StateMachineStateRoundStart-1]
-	_ = x[StateMachineStateBuildPhase-2]
-	_ = x[StateMachineStateOperatePhase-3]
-	_ = x[StateMachineStateRoundEnd-4]
-	_ = x[StateMachineStateGameEnd-5]
+	_ = x[StateMachineStateBuildPhase-1]
+	_ = x[StateMachineStateOperatePhase-2]
+	_ = x[StateMachineStateRoundEnd-3]
+	_ = x[StateMachineStateGameEnd-4]
 }
 
-const _StateMachineState_name = "StateMachineStateGameStartStateMachineStateRoundStartStateMachineStateBuildPhaseStateMachineStateOperatePhaseStateMachineStateRoundEndStateMachineStateGameEnd"
+const _StateMachineState_name = "StateMachineStateGameStartStateMachineStateBuildPhaseStateMachineStateOperatePhaseStateMachineStateRoundEndStateMachineStateGameEnd"
 
-var _StateMachineState_index = [...]uint8{0, 26, 53, 80, 109, 134, 158}
+var _StateMachineState_index = [...]uint8{0, 26, 53, 82, 107, 131}
 
 func (i StateMachineState) String() string {
 	idx := int(i) - 0

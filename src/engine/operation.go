@@ -73,18 +73,18 @@ func OperatePhase(gs *GameState) StateRunner {
 	if gs.generationConstraintMet(am) {
 		gs.SetGlobalLossWithReason(LossConditionInsufficientGeneration)
 		logger.Event().With(GameLogEventEveryoneLoses, gs.Reason).WithKey("generation_assets", am.GenerationAssets()).Log()
-		return RoundEnd
+		return GameEnd
 	}
 	if int(gridOutcome.GridStability) < int(risk) {
 		gs.SetGlobalLossWithReason(LossConditionGridUnstable)
 		logger.Event().With(GameLogEventEveryoneLoses, gs.Reason, gridOutcome.GridStability, risk).Log()
-		return RoundEnd
+		return GameEnd
 	}
 	gs.CarbonEmissions += am.Emissions()
 	if gs.CarbonEmissions > gs.Params.EmissionsCap {
 		gs.SetGlobalLossWithReason(LossConditionCarbonEmissionsExceeded)
 		logger.Event().With(GameLogEventEveryoneLoses, gs.Reason).WithKey("total_emissions", gs.CarbonEmissions).WithKey("new_emissions", am.Emissions()).Log()
-		return RoundEnd
+		return GameEnd
 	}
 
 	// Do market PnL calculations for each player
