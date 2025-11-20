@@ -55,7 +55,7 @@ func (gs GameState) generationConstraintMet(am assets.AssetMix) bool {
 	case params.GenerationConstraintRuleMinimum:
 		return am.GenerationAssets() >= gs.Params.GenerationConstraint
 	case params.GenerationConstraintRuleMaxDecrease:
-		return (gs.LastSnapshot.AssetMix.GenerationAssets() - am.GenerationAssets()) >= -gs.Params.GenerationConstraint
+		return (gs.LastSnapshot.AssetMix.GenerationAssets() - am.GenerationAssets()) <= gs.Params.GenerationConstraint
 	}
 	return false
 }
@@ -65,12 +65,6 @@ func (gs GameState) winConditionMet() bool {
 	case params.WinConditionRuleRenewablePenetrationThreshold:
 		return gs.LastSnapshot.AssetMix.RenewablePenetration() >= gs.Params.RenewablePenetration
 	case params.WinConditionRuleLastFossilLoses:
-		// If there are fossil assets in the takeover pool, the game cannot end
-		for _, a := range gs.TakeoverPool {
-			if a.Type() == assets.TypeFossil {
-				return false
-			}
-		}
 		// Check how many active players have fossil assets
 		var numFossilHolders int
 		for _, p := range gs.Players {

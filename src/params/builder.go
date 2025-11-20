@@ -12,7 +12,7 @@ func (pb Builder) Build() Params {
 }
 
 func BuilderFrom(p Params) *Builder {
-	return &Builder{p:p}
+	return &Builder{p: p}
 }
 
 func (pb *Builder) Capacity(rule CapacityRule, batteryPnL, fossilPnL, poolPnL core.PnLTable) *Builder {
@@ -23,10 +23,22 @@ func (pb *Builder) Capacity(rule CapacityRule, batteryPnL, fossilPnL, poolPnL co
 	return pb
 }
 
+func (pb *Builder) PnL(batteryPnL, fossilPnL, renewablePnL core.PnLTable) *Builder {
+	pb.p.BatteryArbitragePnL = batteryPnL
+	pb.p.FossilWholesalePnL = fossilPnL
+	pb.p.RenewablePnL = renewablePnL
+	return pb
+}
+
 func (pb *Builder) CarbonTax(rule CarbonTaxRule, threshold int, cost int) *Builder {
 	pb.p.CarbonTaxRule = rule
 	pb.p.CarbonTaxThreshold = threshold
 	pb.p.CarbonTaxCost = cost
+	return pb
+}
+
+func (pb *Builder) EmissionsCap(cap int) *Builder {
+	pb.p.EmissionsCap = cap
 	return pb
 }
 
