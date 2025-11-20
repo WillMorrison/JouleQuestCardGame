@@ -16,18 +16,18 @@ type AssetMix struct {
 }
 
 func (am *AssetMix) AddAsset(a Asset) {
-	switch asset := a.(type) {
-	case *RenewableAsset:
+	switch a.Type() {
+	case TypeRenewable:
 		am.Renewables++
-	case *BatteryAsset:
-		switch asset.Mode() & OperationModeCapacity {
+	case TypeBattery:
+		switch a.Mode() & OperationModeCapacity {
 		case OperationModeCapacity:
 			am.BatteriesCapacity++
 		default:
 			am.BatteriesArbitrage++
 		}
-	case *FossilAsset:
-		switch asset.Mode() & OperationModeCapacity {
+	case TypeFossil:
+		switch a.Mode() & OperationModeCapacity {
 		case OperationModeCapacity:
 			am.FossilsCapacity++
 		default:

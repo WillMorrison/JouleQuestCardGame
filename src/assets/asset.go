@@ -43,15 +43,19 @@ type Asset interface {
 	ClearMode()            // Resets the asset to its default operation mode
 }
 
-// asset provides embeddable implementations of the read-only part of the Asset interface
+// asset implements the Asset interface
 type asset struct {
 	assetType     Type
 	operationMode OperationMode
+	allowedModes  OperationMode
 }
 
 func (a asset) Type() Type          { return a.assetType }
 func (a asset) Mode() OperationMode { return a.operationMode }
 func (a *asset) ClearMode()         { a.operationMode = OperationMode(0) }
+func (a *asset) SetMode(mode OperationMode) {
+	a.operationMode = a.operationMode | (mode & a.allowedModes)
+}
 
 func (a asset) String() string {
 	if a.operationMode&OperationModeCapacity != 0 {
@@ -63,11 +67,11 @@ func (a asset) String() string {
 func New(t Type) Asset {
 	switch t {
 	case TypeBattery:
-		return &BatteryAsset{asset: asset{assetType: TypeBattery}}
+		return &asset{assetType: TypeBattery, allowedModes: OperationModeCapacity}
 	case TypeFossil:
-		return &FossilAsset{asset: asset{assetType: TypeFossil}}
+		return &asset{assetType: TypeFossil, allowedModes: OperationModeCapacity}
 	case TypeRenewable:
-		return &RenewableAsset{asset: asset{assetType: TypeRenewable}}
+		return &asset{assetType: TypeRenewable}
 	}
 	return nil
 }
