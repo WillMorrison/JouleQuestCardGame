@@ -57,14 +57,19 @@ func BuildPhase(gs *GameState) StateRunner {
 	for numBuildingPlayers > 0 {
 		actions := gs.possibleActions()
 		if len(actions) == 0 {
-			// game loss, assets in takeover pool that nobody can afford to take over
-			gs.SetGlobalLossWithReason(LossConditionUnownedTakeoverAssets)
-			takeoverMix := assets.AssetMixFrom(slices.Values(gs.TakeoverPool))
-			var money []int
-			for _, p := range gs.Players {
-				money = append(money, p.Money)
+			if gs.Params.TakeoverRule == params.TakeoverRuleForcedTakeover {
+				// game loss, assets in takeover pool that nobody can afford to take over
+				gs.SetGlobalLossWithReason(LossConditionUnownedTakeoverAssets)
+				takeoverMix := assets.AssetMixFrom(slices.Values(gs.TakeoverPool))
+				var money []int
+				for _, p := range gs.Players {
+					money = append(money, p.Money)
+				}
+				logger.Event().With(GameLogEventEveryoneLoses, gs.Reason).WithKey("takeover_pool", takeoverMix).WithKey("player_funds", money).Log()
+			} else {
+				gs.SetGlobalLossWithReason(LossConditionNoActivePlayers) // Should never happen, but if it does, force a game loss
+				logger.Event().With(GameLogEventEveryoneLoses, gs.Reason).Log()
 			}
-			logger.Event().With(GameLogEventEveryoneLoses, gs.Reason).WithKey("takeover_pool", takeoverMix).WithKey("player_funds", money).Log()
 			return GameEnd
 		}
 		// Get and apply player action from client
@@ -116,8 +121,13 @@ func (gs *GameState) possibleActions() []PlayerAction {
 				actions = append(actions, PlayerAction{Type: ActionTypePledgeCapacity, PlayerIndex: pi, AssetType: assets.TypeFossil})
 			}
 		}
-		if takeoverAssetMix.NumAssets() == 0 {
+		switch gs.Params.TakeoverRule {
+		case params.TakeoverRuleVirtualOwner:
 			actions = append(actions, PlayerAction{Type: ActionTypeFinished, PlayerIndex: pi})
+		case params.TakeoverRuleForcedTakeover:
+			if takeoverAssetMix.NumAssets() == 0 {
+				actions = append(actions, PlayerAction{Type: ActionTypeFinished, PlayerIndex: pi})
+			}
 		}
 	}
 	return actions

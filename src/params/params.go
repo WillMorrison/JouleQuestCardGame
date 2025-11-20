@@ -53,11 +53,23 @@ const (
 	GenerationConstraintRuleMaxDecrease
 )
 
+type TakeoverRule int
+
+//go:generate go tool stringer -type=TakeoverRule -trimprefix=TakeoverRule
+const (
+	// No assets can remain in the takeover pool at the end of the build round. Default.
+	TakeoverRuleForcedTakeover TakeoverRule = iota
+
+	// Takeover pool assets are run by "the game". They operate in their default mode, contribute to grid outcome and emissions, and no PnL accrues to players
+	TakeoverRuleVirtualOwner
+)
+
 type Params struct {
 	CapacityRule CapacityRule
 	CarbonTaxRule CarbonTaxRule
 	WinConditionRule WinConditionRule
 	GenerationConstraintRule GenerationConstraintRule
+	TakeoverRule TakeoverRule
 
 	InitialCash                   int
 	StartingFossilAssetsPerPlayer map[int]int

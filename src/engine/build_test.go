@@ -97,7 +97,7 @@ func Test_GameState_possibleActions_CanFinishIfTakeoverPoolEmpty(t *testing.T) {
 	}
 }
 
-func Test_GameState_possibleActions_CannotFinishIfTakeoverPoolHasAssets(t *testing.T) {
+func Test_GameState_possibleActions_CannotFinishIfTakeoverPoolHasAssetsWithForcedTakeover(t *testing.T) {
 	gameState := GameState{
 		Players: []PlayerState{
 			{
@@ -106,12 +106,35 @@ func Test_GameState_possibleActions_CannotFinishIfTakeoverPoolHasAssets(t *testi
 				Money:      0,
 			},
 		},
-		Params:       params.Default,
+		Params:       params.BuilderFrom(params.Default).TakeoverRule(params.TakeoverRuleForcedTakeover).Build(),
 		TakeoverPool: makeAssets(assets.AssetMix{BatteriesArbitrage: 1}),
 	}
 	got := gameState.possibleActions()
 	if slices.ContainsFunc(got, func(pa PlayerAction) bool { return pa.Type == ActionTypeFinished }) {
 		t.Errorf("Player should not be able to finish the build round if there are assets in the takeover pool, got %+v", got)
+	}
+}
+
+func Test_GameState_possibleActions_CanFinishIfTakeoverPoolHasAssetsWithVirtualOwnerRule(t *testing.T) {
+	gameState := GameState{
+		Players: []PlayerState{
+			{
+				Status:     PlayerStatusActive,
+				isBuilding: true,
+				Money:      0,
+			},
+		},
+		Params:       params.BuilderFrom(params.Default).TakeoverRule(params.TakeoverRuleVirtualOwner).Build(),
+		TakeoverPool: makeAssets(assets.AssetMix{BatteriesArbitrage: 1}),
+	}
+	got := gameState.possibleActions()
+	want := PlayerAction{
+		Type:        ActionTypeFinished,
+		PlayerIndex: 0,
+		Cost:        0,
+	}
+	if !slices.Contains(got, want) {
+		t.Errorf("Player should be able to finish the build round for free if the takeover pool is not empty but using TakeoverRuleVirtualOwner, got %+v", got)
 	}
 }
 

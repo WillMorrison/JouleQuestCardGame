@@ -54,6 +54,11 @@ func (pb *Builder) WinConditionRule(rule WinConditionRule, penetration int) *Bui
 	return pb
 }
 
+func (pb *Builder) TakeoverRule(rule TakeoverRule) *Builder {
+	pb.p.TakeoverRule = rule
+	return pb
+}
+
 func (pb *Builder) RenewableCosts(build, scrap int) *Builder {
 	pb.p.RenewableBuildCost = build
 	pb.p.RenewableScrapCost = scrap

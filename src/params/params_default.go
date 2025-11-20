@@ -7,6 +7,7 @@ var Default = Params{
 	CarbonTaxRule:            CarbonTaxRuleNoCarbonTax,
 	WinConditionRule:         WinConditionRuleLastFossilLoses,
 	GenerationConstraintRule: GenerationConstraintRuleMinimum,
+	TakeoverRule:             TakeoverRuleForcedTakeover,
 
 	InitialCash: 50,
 	StartingFossilAssetsPerPlayer: map[int]int{
