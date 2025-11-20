@@ -43,21 +43,17 @@ func BuildPhase(gs *GameState) StateRunner {
 	logger := gs.Logger.Sub().Set(StateMachineStateBuildPhase)
 	logger.Event().With(GameLogEventStateMachineTransition).Log()
 
-	var numActivePlayers int
-	for i, p := range gs.Players {
-		if p.Status == PlayerStatusActive {
-			numActivePlayers++
-			gs.Players[i].isBuilding = true
-			gs.Players[i].resetAllAssets()
-		}
+	var numBuildingPlayers int
+	for _, p := range gs.activePlayers() {
+		p.isBuilding = true
+		numBuildingPlayers++
+		p.resetAllAssets()
+
 	}
-	for {
-		if numActivePlayers == 0 {
-			break
-		}
+	for numBuildingPlayers > 0 {
 		actions := gs.possibleActions()
 		if len(actions) == 0 {
-			//game loss, assets in takeover pool that nobody can afford to take over
+			// game loss, assets in takeover pool that nobody can afford to take over
 			gs.SetGlobalLossWithReason(LossConditionUnownedTakeoverAssets)
 			takeoverMix := assets.AssetMixFrom(slices.Values(gs.TakeoverPool))
 			var money []int
@@ -77,7 +73,7 @@ func BuildPhase(gs *GameState) StateRunner {
 			logger.Event().With(GameLogEventPlayerAction).WithKey("action", chosenAction).Log()
 		}
 		if chosenAction.Type == ActionTypeFinished {
-			numActivePlayers -= 1
+			numBuildingPlayers -= 1
 		}
 	}
 
@@ -87,10 +83,7 @@ func BuildPhase(gs *GameState) StateRunner {
 // possibleActions returns a slice of build phase player actions that are possible
 func (gs *GameState) possibleActions() []PlayerAction {
 	var actions []PlayerAction
-	for pi, p := range gs.Players {
-		if p.Status != PlayerStatusActive {
-			continue
-		}
+	for pi, p := range gs.activePlayers() {
 		if !p.isBuilding {
 			continue
 		}

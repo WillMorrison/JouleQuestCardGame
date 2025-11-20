@@ -2,42 +2,7 @@ package engine
 
 import "github.com/WillMorrison/JouleQuestCardGame/eventlog"
 
-/*
-State machine state diagram
 
-	┌─────────┐
-	│GameStart│
-	└──┬──────┘
-	   │
-	   ├──────────────────────────────────┐
-	   │                                  │
-	   ▼                                  │
-	┌─────┐           ┌───────┐       ┌───┴────┐
-	│Build├──────────►│Operate├──────►│RoundEnd│
-	└──┬──┘           └───┬───┘       └───┬────┘
-	   │                  │               │
-	   │                  │               │
-	   │                  ▼               │
-	   │              ┌───────┐           │
-	   └─────────────►│GameEnd│◄──────────┘
-	                  └───────┘
-*/
-type StateMachineState int
-
-var _ eventlog.Loggable = StateMachineState(0)
-
-//go:generate go tool stringer -type=StateMachineState -trimprefix=GameState
-const (
-	StateMachineStateGameStart StateMachineState = iota
-	StateMachineStateBuildPhase
-	StateMachineStateOperatePhase
-	StateMachineStateRoundEnd
-	StateMachineStateGameEnd
-)
-
-func (sms StateMachineState) LogKey() string {
-	return "state"
-}
 
 type GameLogEvent int
 

@@ -11,13 +11,12 @@ func _() {
 	_ = x[StateMachineStateGameStart-0]
 	_ = x[StateMachineStateBuildPhase-1]
 	_ = x[StateMachineStateOperatePhase-2]
-	_ = x[StateMachineStateRoundEnd-3]
-	_ = x[StateMachineStateGameEnd-4]
+	_ = x[StateMachineStateGameEnd-3]
 }
 
-const _StateMachineState_name = "StateMachineStateGameStartStateMachineStateBuildPhaseStateMachineStateOperatePhaseStateMachineStateRoundEndStateMachineStateGameEnd"
+const _StateMachineState_name = "StateMachineStateGameStartStateMachineStateBuildPhaseStateMachineStateOperatePhaseStateMachineStateGameEnd"
 
-var _StateMachineState_index = [...]uint8{0, 26, 53, 82, 107, 131}
+var _StateMachineState_index = [...]uint8{0, 26, 53, 82, 106}
 
 func (i StateMachineState) String() string {
 	idx := int(i) - 0

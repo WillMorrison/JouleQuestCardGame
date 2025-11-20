@@ -1,10 +1,11 @@
-// This file contains definitions and helper methods for game and
+// This file contains definitions and helper methods for game state
 
 package engine
 
 import (
 	"encoding/json"
 	"fmt"
+	"iter"
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
 	"github.com/WillMorrison/JouleQuestCardGame/core"
@@ -93,17 +94,43 @@ type GameState struct {
 	GetPlayerAction GetPlayerAction // callback when the game needs to pick the next player action
 }
 
-func (gs GameState) getAssetMix() assets.AssetMix {
-	var am assets.AssetMix
-	for _, p := range gs.Players {
-		for _, a := range p.Assets {
-			am.AddAsset(a)
+// allAssets iterates over assets in player portfolios and in the takeover pool
+func (gs GameState) allAssets() iter.Seq[assets.Asset] {
+	return func(yield func(assets.Asset) bool) {
+		for pi := range gs.Players {
+			for ai := range gs.Players[pi].Assets {
+				if !yield(gs.Players[pi].Assets[ai]) {
+					return
+				}
+			}
+		}
+		for ai := range gs.TakeoverPool {
+			if !yield(gs.TakeoverPool[ai]) {
+				return
+			}
 		}
 	}
-	for _, a := range gs.TakeoverPool {
+}
+
+func (gs GameState) getAssetMix() assets.AssetMix {
+	var am assets.AssetMix
+	for a := range gs.allAssets() {
 		am.AddAsset(a)
 	}
 	return am
+}
+
+// activePlayers returns an iterator over the players that have not yet lost
+func (gs *GameState) activePlayers() iter.Seq2[int, *PlayerState] {
+	return func(yield func(int, *PlayerState) bool) {
+		for pi := range gs.Players {
+			if gs.Players[pi].Status == PlayerStatusActive {
+				if !yield(pi, &gs.Players[pi]) {
+					return
+				}
+			}
+		}
+	}
 }
 
 // SetGlobalLossWithReason sets global game status and reason for loss. Caller is responsible for logging, state transitions, etc.
@@ -140,17 +167,12 @@ func NewGame(numPlayers int, gameParams params.Params, logger eventlog.Logger, g
 			Status: PlayerStatusActive,
 		}
 		for range initialAssetsPerPlayer {
-			p.Assets = append(p.Assets, new(assets.FossilAsset))
+			p.Assets = append(p.Assets, assets.New(assets.TypeFossil))
 		}
 		game.Players = append(game.Players, p)
 	}
 
-	am := game.getAssetMix()
-	game.LastSnapshot = Snapshot{
-		AssetMix:        am,
-		PriceVolatility: assets.MapRatioTo(priceVolatilityCalculation, am, priceVolatilityMap),
-		GridStability:   assets.MapRatioTo(gridStabilityCalculation, am, gridStabilityMap),
-	}
+	game.LastSnapshot = game.getSnapshot()
 
 	return &game, nil
 }

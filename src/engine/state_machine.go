@@ -2,7 +2,28 @@
 
 package engine
 
-// StateRunner is a function that executes one step of the state machine, then transitions to the next 
+/*
+State machine state diagram.
+
+	┌─────────┐    ┌──────────┬───►┌────────────┐    ┌───────┐
+	│GameStart├───►│BuildPhase│    │OperatePhase├───►│GameEnd│
+	└─────────┘    └──────────┘◄───┴────────────┘    └───────┘
+*/
+type StateMachineState int
+
+//go:generate go tool stringer -type=StateMachineState -trimprefix=GameState
+const (
+	StateMachineStateGameStart StateMachineState = iota
+	StateMachineStateBuildPhase
+	StateMachineStateOperatePhase
+	StateMachineStateGameEnd
+)
+
+func (sms StateMachineState) LogKey() string {
+	return "state"
+}
+
+// StateRunner is a function that executes one step of the state machine, then transitions to the next
 type StateRunner func(gs *GameState) StateRunner
 
 // Run executes the state machine. It is a no-op to Run a game which has finished already

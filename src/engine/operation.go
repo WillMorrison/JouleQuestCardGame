@@ -4,6 +4,7 @@ package engine
 
 import (
 	"math/rand"
+	"slices"
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
 	"github.com/WillMorrison/JouleQuestCardGame/core"
@@ -38,6 +39,16 @@ var gridStabilityMap = [4]core.GridStability{
 	core.GridStabilityDangerous,
 }
 
+// getSnapshot calculates asset mix, price volatility, and grid stability
+func (gs GameState) getSnapshot() Snapshot {
+	am := gs.getAssetMix()
+	return Snapshot{
+		AssetMix:        am,
+		PriceVolatility: assets.MapRatioTo(priceVolatilityCalculation, am, priceVolatilityMap),
+		GridStability:   assets.MapRatioTo(gridStabilityCalculation, am, gridStabilityMap),
+	}
+}
+
 // generationConstraintMet returns whether the number of generating assets meet the requirements for the rule
 func (gs GameState) generationConstraintMet(am assets.AssetMix) bool {
 	switch gs.Params.GenerationConstraintRule {
@@ -45,6 +56,29 @@ func (gs GameState) generationConstraintMet(am assets.AssetMix) bool {
 		return am.GenerationAssets() >= gs.Params.GenerationConstraint
 	case params.GenerationConstraintRuleMaxDecrease:
 		return (gs.LastSnapshot.AssetMix.GenerationAssets() - am.GenerationAssets()) >= -gs.Params.GenerationConstraint
+	}
+	return false
+}
+
+func (gs GameState) winConditionMet() bool {
+	switch gs.Params.WinConditionRule {
+	case params.WinConditionRuleRenewablePenetrationThreshold:
+		return gs.LastSnapshot.AssetMix.RenewablePenetration() >= gs.Params.RenewablePenetration
+	case params.WinConditionRuleLastFossilLoses:
+		// If there are fossil assets in the takeover pool, the game cannot end
+		for _, a := range gs.TakeoverPool {
+			if a.Type() == assets.TypeFossil {
+				return false
+			}
+		}
+		// Check how many active players have fossil assets
+		var numFossilHolders int
+		for _, p := range gs.Players {
+			if p.Status == PlayerStatusActive && p.HasFossilAssets() {
+				numFossilHolders++
+			}
+		}
+		return numFossilHolders <= 1
 	}
 	return false
 }
@@ -59,12 +93,7 @@ func OperatePhase(gs *GameState) StateRunner {
 	logger.Event().With(GameLogEventEventDrawn, risk).Log()
 
 	// Calculate asset mix, price volatility, grid stability, and new emissions
-	am := gs.getAssetMix()
-	gridOutcome := Snapshot{
-		AssetMix:        am,
-		PriceVolatility: assets.MapRatioTo(priceVolatilityCalculation, am, priceVolatilityMap),
-		GridStability:   assets.MapRatioTo(gridStabilityCalculation, am, gridStabilityMap),
-	}
+	gridOutcome := gs.getSnapshot()
 	logger.Event().
 		WithKey("grid_outcome", gridOutcome).
 		WithKey("new_emissions", gridOutcome.AssetMix.Emissions()).
@@ -89,72 +118,59 @@ func OperatePhase(gs *GameState) StateRunner {
 	}
 
 	// Do market PnL calculations for each player
-	for pi, p := range gs.Players {
+	var numActivePlayers int
+	for pi, p := range gs.activePlayers() {
 		pLogger := logger.Sub().SetKey("player_index", pi)
-		if p.Status == PlayerStatusActive {
-			var playerPnL int
-			for _, a := range p.Assets {
-				playerPnL += gs.Params.PnL(a, gridOutcome.PriceVolatility, gs.CarbonEmissions, gridOutcome.AssetMix.CapacityAssets())
-			}
-			p.Money += playerPnL
-			pLogger.Event().WithKey("player_asset_mix", p.getAssetMix()).WithKey("player_PnL", playerPnL).WithKey("player_money", p.Money).With(GameLogEventMarketOutcome).Log()
+		numActivePlayers++
+		var playerPnL int
+		for _, a := range p.Assets {
+			playerPnL += gs.Params.PnL(a, gridOutcome.PriceVolatility, gs.CarbonEmissions, gridOutcome.AssetMix.CapacityAssets())
+		}
+		p.Money += playerPnL
+		pLogger.Event().WithKey("player_asset_mix", p.getAssetMix()).WithKey("player_PnL", playerPnL).WithKey("player_money", p.Money).With(GameLogEventMarketOutcome).Log()
 
-			// Check player loss conditions
-			if p.Money < 0 {
-				p.SetLossWithReason(LossConditionPlayerBankrupt)
-				gs.movePlayerAssetsToTakeoverPool(pi)
-				pLogger.Event().With(GameLogEventPlayerLoses, p.Reason).WithKey("player_money", p.Money).Log()
-			}
+		// Check player loss conditions
+		if p.Money < 0 {
+			p.SetLossWithReason(LossConditionPlayerBankrupt)
+			gs.movePlayerAssetsToTakeoverPool(pi)
+			pLogger.Event().With(GameLogEventPlayerLoses, p.Reason).WithKey("player_money", p.Money).Log()
+			numActivePlayers--
 		}
 	}
 
 	gs.LastSnapshot = gridOutcome
 
-	return RoundEnd
-}
-
-
-// RoundEnd checks whether the win condition is met after an Operate round
-func RoundEnd(gs *GameState) StateRunner {
-	logger := gs.Logger.Sub().Set(StateMachineStateRoundEnd)
-	logger.Event().With(GameLogEventStateMachineTransition).Log()
-
-	// Check for loss condition: last player with fossil assets, or all players lost
-	var lastFossilPlayerIndex int = -1
-	var fossilPlayerCount int
-	var activePlayerCount int
-	for pi, p := range gs.Players {
-		if p.Status == PlayerStatusActive {
-			activePlayerCount++
-			if p.HasFossilAssets() {
-				lastFossilPlayerIndex = pi
-				fossilPlayerCount++
-			}
-		}
-	}
-
-	// If the end-game condition is not satisfied yet, start another round
-	if fossilPlayerCount > 1 && activePlayerCount > 0 {
-		return BuildPhase
-	}
-
-	// Handle the game end trigger: only one player left has fossil assets
-	if fossilPlayerCount == 1 {
-		gs.Players[lastFossilPlayerIndex].SetLossWithReason(LossConditionLastPlayerWithFossilAssets)
-		activePlayerCount--
-		logger.Event().WithKey("player_index", lastFossilPlayerIndex).With(GameLogEventPlayerLoses, LossConditionLastPlayerWithFossilAssets).Log()
-		// Normally we would add the player's assets to the takeover pool when they lose, but having only
-		// one player left with fossil assets means the game is over, won by the other players.
-	}
-
-	// If the last player left was just eliminated due to holding fossil assets, all players are out
-	if activePlayerCount == 0 {
+	// If all players are out (e.g. due to bankruptcy), the game is a loss
+	if numActivePlayers == 0 {
 		gs.SetGlobalLossWithReason(LossConditionNoActivePlayers)
 		logger.Event().With(GameLogEventEveryoneLoses, LossConditionNoActivePlayers).Log()
 		return GameEnd
 	}
 
-	// There are active players left after eliminating the last fossil holder (if any), they win!
+	// If the win condition is not met, start another round
+	if !gs.winConditionMet() {
+		return BuildPhase
+	}
+
+	if gs.Params.WinConditionRule == params.WinConditionRuleLastFossilLoses {
+		// The last player with fossil assets left loses
+		lastFossilPlayerIndex := slices.IndexFunc(gs.Players, PlayerState.HasFossilAssets)
+		if lastFossilPlayerIndex != -1 {
+			gs.Players[lastFossilPlayerIndex].SetLossWithReason(LossConditionLastPlayerWithFossilAssets)
+			logger.Event().WithKey("player_index", lastFossilPlayerIndex).With(GameLogEventPlayerLoses, LossConditionLastPlayerWithFossilAssets).Log()
+
+			// Check if we just eliminated the last player. If so, the game is a loss.
+			numActivePlayers--
+			if numActivePlayers == 0 {
+				gs.SetGlobalLossWithReason(LossConditionNoActivePlayers)
+				logger.Event().With(GameLogEventEveryoneLoses, LossConditionNoActivePlayers).Log()
+				return GameEnd
+			}
+		}
+
+	}
+
+	// There are active players left, they win!
 	gs.Status = GameStatusWin
 	logger.Event().With(GameLogEventGlobalWin).Log()
 	return GameEnd
