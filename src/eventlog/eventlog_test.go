@@ -167,3 +167,15 @@ func Test_JsonLogger_Sub(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+func Test_NullLogger_NoPanic(t *testing.T) {
+	logger := NullLogger{}
+	subLogger := logger.
+		Set(TestLoggable{"key1", "value1"}).
+		SetKey("key2", "value2").
+		Sub()
+	subLogger.Event().
+		With(TestLoggable{"key3", "value3"}).
+		WithKey("key4", "value4").
+		Log()
+}

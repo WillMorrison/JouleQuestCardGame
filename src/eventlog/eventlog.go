@@ -33,12 +33,18 @@ type Logger interface {
 // NullLogger is a no-op Logger that does nothing.
 type NullLogger struct{}
 
-func (l NullLogger) Event() LogEvent                     { return nil }
-func (l NullLogger) Sub() Logger                         { return nil }
-func (l NullLogger) Set(value ...Loggable) Logger        { return nil }
-func (l NullLogger) SetKey(key string, value any) Logger { return nil }
+func (l NullLogger) Event() LogEvent                     { return nullEvent{} }
+func (l NullLogger) Sub() Logger                         { return l }
+func (l NullLogger) Set(value ...Loggable) Logger        { return l }
+func (l NullLogger) SetKey(key string, value any) Logger { return l }
 
 var _ Logger = NullLogger{}
+
+type nullEvent struct{}
+
+func (e nullEvent) WithKey(key string, value any) LogEvent { return e }
+func (e nullEvent) With(value ...Loggable) LogEvent        { return e }
+func (e nullEvent) Log()                                   {}
 
 // WriterLogger is a logger that writes log events using a provided io.Writer.
 type jsonLogger struct {
