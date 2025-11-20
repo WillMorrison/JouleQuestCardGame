@@ -26,6 +26,10 @@ func (at ActionType) LogKey() string {
 	return "action_type"
 }
 
+func (at ActionType) MarshalText() ([]byte, error) {
+	return []byte(at.String()), nil
+}
+
 type PlayerAction struct {
 	Type        ActionType
 	PlayerIndex int         // Index of the player performing the action
