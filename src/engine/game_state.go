@@ -1,7 +1,10 @@
+// This file contains definitions and helper methods for game and
+
 package engine
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
 	"github.com/WillMorrison/JouleQuestCardGame/core"
@@ -85,8 +88,8 @@ type GameState struct {
 
 	LastSnapshot Snapshot // Summary of the previous round's Operate phase
 
-	Params params.Params
-	Logger eventlog.Logger `json:"-"`
+	Params          params.Params
+	Logger          eventlog.Logger `json:"-"`
 	GetPlayerAction GetPlayerAction // callback when the game needs to pick the next player action
 }
 
@@ -96,6 +99,9 @@ func (gs GameState) getAssetMix() assets.AssetMix {
 		for _, a := range p.Assets {
 			am.AddAsset(a)
 		}
+	}
+	for _, a := range gs.TakeoverPool {
+		am.AddAsset(a)
 	}
 	return am
 }
@@ -110,4 +116,41 @@ func (gs *GameState) SetGlobalLossWithReason(reason LossCondition) {
 func (gs *GameState) movePlayerAssetsToTakeoverPool(pi int) {
 	gs.TakeoverPool = append(gs.TakeoverPool, gs.Players[pi].Assets...)
 	gs.Players[pi].Assets = nil
+}
+
+// NewGame returns a new GameState ready to play
+func NewGame(numPlayers int, gameParams params.Params, logger eventlog.Logger, getAction GetPlayerAction) (*GameState, error) {
+	initialAssetsPerPlayer, ok := gameParams.StartingFossilAssetsPerPlayer[numPlayers]
+	if !ok {
+		return nil, fmt.Errorf("invalid number of players: %d", numPlayers)
+	}
+
+	var game = GameState{
+		Status:          GameStatusOngoing,
+		Round:           0,
+		CarbonEmissions: 0,
+		Params:          gameParams,
+		Logger:          logger,
+		GetPlayerAction: getAction,
+	}
+
+	for range numPlayers {
+		p := PlayerState{
+			Money:  gameParams.InitialCash,
+			Status: PlayerStatusActive,
+		}
+		for range initialAssetsPerPlayer {
+			p.Assets = append(p.Assets, new(assets.FossilAsset))
+		}
+		game.Players = append(game.Players, p)
+	}
+
+	am := game.getAssetMix()
+	game.LastSnapshot = Snapshot{
+		AssetMix:        am,
+		PriceVolatility: assets.MapRatioTo(priceVolatilityCalculation, am, priceVolatilityMap),
+		GridStability:   assets.MapRatioTo(gridStabilityCalculation, am, gridStabilityMap),
+	}
+
+	return &game, nil
 }
