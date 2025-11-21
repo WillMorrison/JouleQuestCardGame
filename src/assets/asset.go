@@ -20,6 +20,20 @@ func (at Type) MarshalText() ([]byte, error) {
 	return []byte(at.String()), nil
 }
 
+func (at *Type) UnmarshalText(text []byte) error {
+	switch string(text){
+	case TypeBattery.String():
+		*at = TypeBattery
+	case TypeRenewable.String():
+		*at = TypeRenewable
+	case TypeFossil.String():
+		*at = TypeFossil
+	default:
+		return fmt.Errorf("%q is not a valid asset Type", text)
+	}
+	return nil
+}
+
 var Types = [...]Type{TypeBattery, TypeRenewable, TypeFossil}
 
 // Operation mode is a bitfield indicating whether an asset is operating in a certain way.

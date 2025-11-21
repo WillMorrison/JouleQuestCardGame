@@ -30,6 +30,26 @@ func (at ActionType) MarshalText() ([]byte, error) {
 	return []byte(at.String()), nil
 }
 
+func (at *ActionType) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case ActionTypeBuildAsset.String():
+		*at = ActionTypeBuildAsset
+	case ActionTypeScrapAsset.String():
+		*at = ActionTypeScrapAsset
+	case ActionTypeTakeoverAsset.String():
+		*at = ActionTypeTakeoverAsset
+	case ActionTypeTakeoverScrapAsset.String():
+		*at = ActionTypeTakeoverScrapAsset
+	case ActionTypePledgeCapacity.String():
+		*at = ActionTypePledgeCapacity
+	case ActionTypeFinished.String():
+		*at = ActionTypeFinished
+	default:
+		return fmt.Errorf("%q is not a valid ActionType", text)
+	}
+	return nil
+}
+
 type PlayerAction struct {
 	Type        ActionType
 	PlayerIndex int         // Index of the player performing the action
