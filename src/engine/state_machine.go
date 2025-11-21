@@ -54,5 +54,8 @@ func GameEnd(gs *GameState) StateRunner {
 		WithKey("total_emissions", gs.CarbonEmissions).
 		WithKey("players", gs.Players).
 		Log()
+	if gs.GameOverFunc != nil {
+		gs.GameOverFunc()
+	}
 	return nil
 }

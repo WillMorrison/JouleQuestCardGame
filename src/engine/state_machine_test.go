@@ -21,7 +21,7 @@ func Test_Run_E2E_NoopPlayers(t *testing.T) {
 	}
 	testLogger := eventlog.NewJsonLogger(t.Output())
 	// Create a game with 4 players who do nothing
-	game, err := NewGame(4, params.Default, testLogger, getActionJustFinish)
+	game, err := NewGame(4, params.Default, testLogger, getActionJustFinish, nil)
 	if err != nil {
 		t.Fatalf("Couldn't create new game: %s", err)
 	}

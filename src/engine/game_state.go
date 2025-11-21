@@ -92,6 +92,7 @@ type GameState struct {
 	Params          params.Params
 	Logger          eventlog.Logger `json:"-"`
 	GetPlayerAction GetPlayerAction // callback when the game needs to pick the next player action
+	GameOverFunc func() // Callback function which is called when the game ends.
 }
 
 // allAssets iterates over assets in player portfolios and in the takeover pool
@@ -146,7 +147,7 @@ func (gs *GameState) movePlayerAssetsToTakeoverPool(pi int) {
 }
 
 // NewGame returns a new GameState ready to play
-func NewGame(numPlayers int, gameParams params.Params, logger eventlog.Logger, getAction GetPlayerAction) (*GameState, error) {
+func NewGame(numPlayers int, gameParams params.Params, logger eventlog.Logger, getAction GetPlayerAction, doneCallback func()) (*GameState, error) {
 	initialAssetsPerPlayer, ok := gameParams.StartingFossilAssetsPerPlayer[numPlayers]
 	if !ok {
 		return nil, fmt.Errorf("invalid number of players: %d", numPlayers)
@@ -159,6 +160,7 @@ func NewGame(numPlayers int, gameParams params.Params, logger eventlog.Logger, g
 		Params:          gameParams,
 		Logger:          logger,
 		GetPlayerAction: getAction,
+		GameOverFunc: doneCallback,
 	}
 
 	for range numPlayers {
