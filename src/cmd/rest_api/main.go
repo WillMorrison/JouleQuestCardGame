@@ -4,9 +4,11 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -15,7 +17,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
+	"syscall"
+	"time"
 
+	"github.com/WillMorrison/JouleQuestCardGame/assets"
 	"github.com/WillMorrison/JouleQuestCardGame/engine"
 	"github.com/WillMorrison/JouleQuestCardGame/eventlog"
 	"github.com/WillMorrison/JouleQuestCardGame/params"
@@ -65,11 +71,12 @@ func newGame(id string, players int, gameParams params.Params) (*game, error) {
 
 type stateResponse struct {
 	Status            string
-	Reason            string `json:",omitempty"`
+	Reason            string
 	Round             int
 	EmissionsCounter  int
 	Players           []engine.PlayerState
 	LastRoundSnapshot engine.Snapshot
+	TakeoverPool      assets.AssetMix
 }
 
 type gameResponse struct {
@@ -81,20 +88,20 @@ type gameResponse struct {
 // Returns the client-observable game state. Blocks on receive from possibleActions
 func (g *game) getState() gameResponse {
 	actions := <-g.possibleActions
-	status := g.game.Status
-	var reason string
-	if status == engine.GameStatusLoss {
-		reason = g.game.Reason.String()
+	var tam assets.AssetMix
+	for _, ta := range g.game.TakeoverPool {
+		tam.AddAsset(ta)
 	}
 	return gameResponse{
 		ID: g.id,
 		Game: stateResponse{
 			Status:            g.game.Status.String(),
-			Reason:            reason,
+			Reason:            g.game.Reason.String(),
 			Round:             g.game.Round,
 			EmissionsCounter:  g.game.CarbonEmissions,
 			Players:           g.game.Players,
 			LastRoundSnapshot: g.game.LastSnapshot,
+			TakeoverPool:      tam,
 		},
 		PossibleActions: actions,
 	}
@@ -136,14 +143,15 @@ func (g *game) writeLogToRequest(resp http.ResponseWriter) {
 
 // A server manages multiple games
 type server struct {
-	games map[string]*game
-	rng   rand.Source
+	mu sync.RWMutex
+	games map[string]*game // Currently running games
+	rng   rand.Source      // RNG used to create game IDs
 }
 
 func newServer() *server {
 	return &server{
 		games: make(map[string]*game),
-		rng:   rand.NewSource(846254781),
+		rng:   rand.NewSource(846254781), // Fixed RNG seed for game IDs
 	}
 }
 
@@ -165,7 +173,11 @@ func (s *server) newGame() http.HandlerFunc {
 			writeError(resp, http.StatusInternalServerError, fmt.Errorf("cannot create new game: %w", err))
 			return
 		}
-		s.games[sid] = game
+		{
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			s.games[sid] = game
+		}
 		game.writeStateResponse(resp)
 	}
 }
@@ -178,6 +190,9 @@ func (s *server) actionHandler() http.HandlerFunc {
 			writeError(resp, http.StatusInternalServerError, fmt.Errorf(`cannot look up "id" in pattern %s`, req.Pattern))
 			return
 		}
+		
+		s.mu.RLock()
+		defer s.mu.RUnlock()
 		game, ok := s.games[sid]
 		if !ok {
 			writeError(resp, http.StatusNotFound, fmt.Errorf("no game with id %q", sid))
@@ -195,6 +210,9 @@ func (s *server) logHandler() http.HandlerFunc {
 			writeError(resp, http.StatusInternalServerError, fmt.Errorf(`cannot look up "id" in pattern %s`, req.Pattern))
 			return
 		}
+
+		s.mu.RLock()
+		defer s.mu.RUnlock()
 		game, ok := s.games[sid]
 		if !ok {
 			writeError(resp, http.StatusNotFound, fmt.Errorf("no game with id %q", sid))
@@ -212,6 +230,8 @@ func (s *server) deleteHandler() http.HandlerFunc {
 			writeError(resp, http.StatusInternalServerError, fmt.Errorf(`cannot look up "id" in pattern %s`, req.Pattern))
 			return
 		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
 		delete(s.games, sid)
 	}
 }
@@ -224,14 +244,14 @@ func (s *server) rootHandler() http.HandlerFunc {
 			keys = append(keys, k)
 		}
 
-		resp.Header().Set("Content-Type", "application/jsonl; charset=utf-8")
+		resp.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(resp).Encode(map[string][]string{"ids": keys})
 	}
 }
 
 func (s *server) Mux() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("CREATE /new", s.newGame())
+	mux.HandleFunc("POST /new", s.newGame())
 	mux.HandleFunc("POST /g/{id}/action", s.actionHandler())
 	mux.HandleFunc("GET /g/{id}/log", s.logHandler())
 	mux.HandleFunc("DELETE /g/{id}", s.deleteHandler())
@@ -239,46 +259,84 @@ func (s *server) Mux() *http.ServeMux {
 	return mux
 }
 
-func main() {
-	var err error
-	var listenAddr string
-	var socketPath string
-	flag.StringVar(&listenAddr, "listen", "127.0.0.1:", "TCP address to listen on")
-	flag.StringVar(&socketPath, "socket", "", "Path to a unix socket to listen on")
-	flag.Parse()
+const (
+	defaultNetAddr = "localhost:0"
+)
 
-	srv := newServer()
-
-	var listener net.Listener
-	if socketPath == "" {
-		listener, err = net.Listen("tcp", listenAddr)
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Printf("Listening on %s", listener.Addr().String())
-	} else {
-		// Clean up old socket file if it exists. Ignore errors (e.g. if the file didn't exist)
+// getListener returns a listener to use for the server, a cleanup function, or an error.
+//
+// It is the caller's responsibility to call listener.Close() and cleanup() if the function does not return an error.
+// If multiple arguments are set, the first one in [socketPath, netAddr] is used.
+//
+// Args:
+//   - netAddr: An IP:[port] address for using TCP. The port may be left empty to automatically choose one.
+//   - socketPath: A path to create a unix socket. Any existing file at the path will be removed, and the socket file will be removed by cleanup().
+func getListener(netAddr string, socketPath string) (listener net.Listener, cleanup func(), err error) {
+	switch {
+	case socketPath != "":
 		os.Remove(socketPath)
+		cleanup = func() {
+			log.Printf("Removing socket: %s", socketPath)
+			os.Remove(socketPath)
+		}
 		listener, err = net.Listen("unix", socketPath)
 		if err != nil {
-			log.Fatal(err)
+			cleanup()
+			return nil, nil, err
 		}
-		log.Printf("Listening on unix:%s", listener.Addr().String())
+		log.Printf("Listening on unix socket %s", socketPath)
+		return
+	case netAddr != "":
+		cleanup = func() {}
+		listener, err = net.Listen("tcp", netAddr)
+		if err != nil {
+			return nil, nil, err
+		}
+		log.Printf("Listening on %s", listener.Addr().String())
+		return
+	default:
+		return nil, nil, fmt.Errorf("one of netAddr or socketPath must be set")
+	}
+}
 
-		// Clean up on ctrl-C
-		sigc := make(chan os.Signal, 1)
-		signal.Notify(sigc, os.Interrupt)
-		go func(c chan os.Signal) {
-			<-c
-			fmt.Println("Caught signal: shutting down and removing socket")
-			os.Remove(socketPath)
-			os.Exit(0)
-		}(sigc)
+func main() {
+	var err error
+	var netAddr string
+	var socketPath string
+	flag.StringVar(&netAddr, "addr", defaultNetAddr, "Address in host:port format. If the port is 0 or empty, an unused port will be selected.")
+	flag.StringVar(&socketPath, "socket", "", "Path to create a unix socket at. Server will listen for connections on the UNIX socket.")
+	flag.Parse()
+
+	// Create listener for the server to accept connections on
+	listener, cleanup, err := getListener(netAddr, socketPath)
+	if err != nil {
+		log.Fatalf("Could not set up listener: %s", err)
 	}
 	defer listener.Close()
+	defer cleanup()
 
-	err = http.Serve(listener, srv.Mux())
-	if err != nil {
-		log.Fatal(err)
+	// Handle connections on the listener, forward unexpected errors to errChan
+	httpServer := http.Server{Handler: newServer().Mux()}
+	errChan := make(chan error, 1)
+	go func() {
+		err := httpServer.Serve(listener)
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errChan <- err
+		}
+	}()
+
+	// Need to trap Interrupt (Ctrl+C) and Terminate signals, otherwise deferred cleanup code doesn't run
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	select {
+	case sig := <-sigChan:
+		log.Printf("Received OS signal: %v. Starting graceful shutdown...", sig)
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		if err := httpServer.Shutdown(ctx); err != nil {
+			log.Printf("Shutdown error: %v", err)
+		}
+	case err := <-errChan:
+		log.Printf("Serve() exited with unexpected error: %v", err)
 	}
 }
