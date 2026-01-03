@@ -1,0 +1,1 @@
+To regenerate the client, run `uvx openapi-python-client generate --path ../src/cmd/rest_api/openapi.json --config ./openapi_python_client_config.yaml --output-path ./apiclient` from this directory

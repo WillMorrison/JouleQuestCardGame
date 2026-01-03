@@ -1,0 +1,399 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "JouleQuest API",
+        "version": "1.0"
+    },
+    "servers": [
+        {
+            "url": "http://127.0.0.1:16687",
+            "description": "Local test server"
+        }
+    ],
+    "components": {
+        "schemas": {
+            "Error": {
+                "type": "object",
+                "required": [
+                    "error"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "error": {
+                        "description": "The error message",
+                        "type": "string"
+                    }
+                }
+            },
+            "AssetMix": {
+                "type": "object",
+                "required": [
+                    "Renewables",
+                    "BatteriesArbitrage",
+                    "BatteriesCapacity",
+                    "FossilsWholesale",
+                    "FossilsCapacity"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "Renewables": {
+                        "type": "integer",
+                        "default": 0
+                    },
+                    "BatteriesArbitrage": {
+                        "type": "integer",
+                        "default": 0
+                    },
+                    "BatteriesCapacity": {
+                        "type": "integer",
+                        "default": 0
+                    },
+                    "FossilsWholesale": {
+                        "type": "integer",
+                        "default": 0
+                    },
+                    "FossilsCapacity": {
+                        "type": "integer",
+                        "default": 0
+                    }
+                }
+            },
+            "PlayerAction": {
+                "type": "object",
+                "required": [
+                    "Type",
+                    "PlayerIndex"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "Type": {
+                        "type": "string",
+                        "enum": [
+                            "BuildAsset",
+                            "ScrapAsset",
+                            "TakeoverAsset",
+                            "TakeoverScrapAsset",
+                            "PledgeCapacity",
+                            "Finished"
+                        ]
+                    },
+                    "PlayerIndex": {
+                        "type": "integer"
+                    },
+                    "AssetType": {
+                        "type": "string",
+                        "enum": [
+                            "Renewable",
+                            "Battery",
+                            "Fossil"
+                        ]
+                    },
+                    "Cost": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "Player": {
+                "type": "object",
+                "required": [
+                    "Status",
+                    "Money",
+                    "Assets"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "Status": {
+                        "type": "string",
+                        "enum": [
+                            "Active",
+                            "Lost"
+                        ]
+                    },
+                    "Money": {
+                        "type": "integer"
+                    },
+                    "Assets": {
+                        "$ref": "#/components/schemas/AssetMix"
+                    }
+                }
+            },
+            "Game": {
+                "type": "object",
+                "required": [
+                    "Status",
+                    "Reason",
+                    "Round",
+                    "EmissionsCounter",
+                    "LastRoundSnapshot",
+                    "Players",
+                    "TakeoverPool"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "Status": {
+                        "type": "string",
+                        "enum": [
+                            "Ongoing",
+                            "Win",
+                            "Loss"
+                        ]
+                    },
+                    "Reason": {
+                        "type": "string",
+                        "default": "None",
+                        "enum": [
+                            "None",
+                            "GridUnstable",
+                            "InsufficientGeneration",
+                            "CarbonEmissionsExceeded",
+                            "NoActivePlayers",
+                            "UnownedTakeoverAssets"
+                        ]
+                    },
+                    "Round": {
+                        "type": "integer"
+                    },
+                    "EmissionsCounter": {
+                        "type": "integer"
+                    },
+                    "LastRoundSnapshot": {
+                        "description": "Summary statistics from the last round of the game",
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "AssetMix",
+                            "PriceVolatility",
+                            "GridStability"
+                        ],
+                        "properties": {
+                            "AssetMix": {
+                                "$ref": "#/components/schemas/AssetMix"
+                            },
+                            "PriceVolatility": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 3
+                            },
+                            "GridStability": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 3
+                            }
+                        }
+                    },
+                    "Players": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Player"
+                        }
+                    },
+                    "TakeoverPool": {
+                        "$ref": "#/components/schemas/AssetMix"
+                    }
+                }
+            },
+            "GameUpdate": {
+                "type": "object",
+                "required": [
+                    "ID",
+                    "Game",
+                    "PossibleActions"
+                ],
+                "properties": {
+                    "ID": {
+                        "description": "Internal game ID",
+                        "type": "string"
+                    },
+                    "PossibleActions": {
+                        "description": "The set of actions that may be sent in the next request to /g/{GameID}/action",
+                        "type": "array",
+                        "nullable": true,
+                        "items": {
+                            "$ref": "#/components/schemas/PlayerAction"
+                        }
+                    },
+                    "Game": {
+                        "$ref": "#/components/schemas/Game"
+                    }
+                }
+            },
+            "GameIDList": {
+                "type": "object",
+                "required": [
+                    "ids"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "responses": {
+            "errorResponse": {
+                "description": "Response describing an error",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Error"
+                        }
+                    }
+                }
+            },
+            "stateResponse": {
+                "description": "Game State",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/GameUpdate"
+                        }
+                    }
+                }
+            }
+        },
+        "parameters": {
+            "GameID": {
+                "name": "GameID",
+                "in": "path",
+                "required": true,
+                "description": "The ID of a game returned by the server",
+                "schema": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "paths": {
+        "/": {
+            "get": {
+                "description": "List of GameIDs",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GameIDList"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/new": {
+            "post": {
+                "description": "Create a new game",
+                "parameters": [
+                    {
+                        "name": "numPlayers",
+                        "required": true,
+                        "description": "Number of players to start a game for",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 2,
+                            "maximum": 7
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "$ref": "#/components/responses/stateResponse"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/errorResponse"
+                    }
+                }
+            }
+        },
+        "/g/{GameID}": {
+            "delete": {
+                "description": "Let the server clean up state for the given game",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/GameID"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Game with this ID was cleaned up, or never existed"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/errorResponse"
+                    }
+                }
+            }
+        },
+        "/g/{GameID}/action": {
+            "post": {
+                "description": "Post an action to the given game",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/GameID"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PlayerAction"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "$ref": "#/components/responses/stateResponse"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/errorResponse"
+                    }
+                }
+            }
+        },
+        "/g/{GameID}/log": {
+            "get": {
+                "description": "Get the event log for the given game",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/GameID"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Game event log so far",
+                        "content": {
+                            "application/jsonl": {
+                                "schema": {
+                                    "type": "string",
+                                    "default": ""
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/errorResponse"
+                    }
+                }
+            }
+        }
+    }
+}
