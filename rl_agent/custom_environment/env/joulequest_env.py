@@ -4,10 +4,10 @@ from gymnasium import spaces
 from gymnasium.utils import seeding
 
 from pettingzoo import AECEnv
-from pettingzoo.utils import AgentSelector
+from pettingzoo.utils import wrappers
 
 from apiclient import joule_quest_api_client
-from apiclient.joule_quest_api_client.models import PlayerAction, PlayerActionAssetType, PlayerActionType, GameStatus, GameReason, PlayerStatus
+from apiclient.joule_quest_api_client.models import PlayerAction, PlayerActionAssetType, PlayerActionType, Game, GameStatus, GameReason, PlayerStatus
 from game_client import GameClient
 
 # The observation space for a single player
@@ -38,7 +38,7 @@ OBSERVATION_SPACE = spaces.Dict({
                     "FossilsCapacity": spaces.Discrete(1024),
                 }),
            }),
-           "action_mask": spaces.Discrete(15, dtype=np.int8)
+           "action_mask": spaces.MultiBinary(15)
         })
 
 # (build, scrap, takeover, takeover+scrap)x(renewable, battery, fossil) + (pledge)x(battery, fossil) + (finished)
@@ -115,7 +115,13 @@ def GameReasontoInt(reason: GameReason) -> np.int8:
         return np.int8(5)
     raise ValueError(f"Invalid Game Loss Reason {reason}")
 
-class CustomEnvironment(AECEnv):
+def env(num_players: int, client: joule_quest_api_client.Client):
+    env = JoulequestEnv(num_players, client)
+    env = wrappers.AssertOutOfBoundsWrapper(env)
+    env = wrappers.OrderEnforcingWrapper(env)
+    return env
+
+class JoulequestEnv(AECEnv):
     metadata = {
         "name": "joulequest_environment_v0",
     }
@@ -134,72 +140,100 @@ class CustomEnvironment(AECEnv):
         self.observation_spaces = {agent: OBSERVATION_SPACE for agent in self.possible_agents}
         self.action_spaces = {agent: ACTION_SPACE for agent in self.possible_agents}
 
+    @property
+    def _active_agents(self) -> list[int]:
+        if self._game_client is None:
+            return []
+        return list(set(a.player_index for a in self._game_client.possible_actions))
+    
+    def _select_active_agent(self) -> int:
+        return self.np_random.choice(self._active_agents)
+
     def reset(self, seed=None, options=None):
         if self._game_client is not None:
             self._game_client.close()
         self._game_client = GameClient(self._api_client, self.max_num_agents)
 
         # Unlike gymnasium's Env, the environment is responsible for setting the random seed explicitly.
-        if seed is not None:
-            self.np_random, self.np_random_seed = seeding.np_random(seed)
+        self.np_random, self.np_random_seed = seeding.np_random(seed)
         self.agents: list[int] = self.possible_agents[:]
         self.rewards = {agent: 0 for agent in self.agents}
+        self._cumulative_rewards = {agent: 0 for agent in self.agents}
         self.terminations = {agent: False for agent in self.agents}
         self.truncations = {agent: False for agent in self.agents}
         self.infos = {agent: {} for agent in self.agents}
         self.observations = {agent: {} for agent in self.agents}
-        self._agent_selector = AgentSelector(self.agents)
-        self.agent_selection = self._agent_selector.next()
+        self.agent_selection = self._select_active_agent()
 
-    def close(self):
-        if self._game_client is not None:
-            self._game_client.close()
-        self._game_client = None
-
-    def step(self, action:int):
+    def step(self, action:int|None):
         if self._game_client is None:
             raise TypeError("Game client should be initialized")
+        if (self.terminations[self.agent_selection] or self.truncations[self.agent_selection]):
+            self._was_dead_step(action)
+            return
+        if action is None:
+            self.agent_selection = self._select_active_agent()
+            return
+        
+        # cumulative rewards from previous iterations should be cleared
+        # seems weird, but makes the api_test pass
+        self._cumulative_rewards[self.agent_selection] = 0
 
         possible_actions = [a for a in self._game_client.possible_actions if a.player_index==self.agent_selection]
         if not possible_actions:
             # Chosen agent can't do anything, move along
-            self.agent_selection = self._agent_selector.next()
+            self.agent_selection = self._select_active_agent()
             return
         chosen_action = IntToPlayerAction(action, possible_actions)
 
         self._game_client.send_action(chosen_action)
 
         # Handle global game end conditions
+        is_over = False
         if self._game_client.game.status == GameStatus.LOSS:
+            is_over = True
             for a in self.agents:
                 self.rewards[a] -= 1000  # Large collective penalty
                 self.terminations[a] = True
         elif self._game_client.game.status == GameStatus.WIN:
+            is_over = True
             for a in self.agents:
                 self.rewards[a] += 100 # Reward for Winning!
                 self.rewards[a] += self._game_client.game.players[a].money # Reward for successful capitalism
                 self.terminations[a] = True
 
-        player = self._game_client.game.players[self.agent_selection]
-        if player.status == PlayerStatus.LOST:
-            self.rewards[self.agent_selection] -= 1000 # Large penalty for losing
-            self.terminations[self.agent_selection] = True
-        else:
-            self.rewards[self.agent_selection] += 0.01*player.money # Hint that more money is good
-            self.rewards[self.agent_selection] -= 0.01*self._game_client.game.emissions_counter # Hint that emissions counter going up is bad
+        # Handle player loss for active agents
+        for a in self.agents:
+            if self._game_client.game.players[a].status == PlayerStatus.LOST:
+                self.rewards[a] -= 1000  # Large penalty for losing
+                self.terminations[a] = True
 
-        self.agent_selection = self._agent_selector.next()
+        # Incremental rewards if the active agent is still in the game
+        player = self._game_client.game.players[self.agent_selection]
+        if player.status != PlayerStatus.LOST:
+            self.rewards[self.agent_selection] += 0.001*player.money # Hint that more money is good
+            self.rewards[self.agent_selection] -= 0.001*self._game_client.game.emissions_counter # Hint that emissions counter going up is bad
+
+        if not is_over:
+            self.agent_selection = self._select_active_agent()
+
+        self._accumulate_rewards()
+
+    def _action_mask(self, agent, possible_actions: list[PlayerAction]) -> list[int]:
+        # Get valid action ints for agent (e.g., [0, 4, 7])
+        valid_actions = [PlayerActionToInt(a) for a in possible_actions if a.player_index==agent]
+        
+        # Create a binary mask of 0s (forbidden) and 1s (allowed)
+        mask = [1 if i in valid_actions else 0 for i in range(15)]
+
+        return mask
 
 
     def observe(self, agent:int):
         if self._game_client is None:
             raise TypeError("Game client should be initialized")
         
-        # Get valid action ints for agent (e.g., [0, 4, 7])
-        valid_actions = [PlayerActionToInt(a) for a in self._game_client.possible_actions if a.player_index==agent]
-        
-        # Create a binary mask of 0s (forbidden) and 1s (allowed)
-        mask = [1 if i in valid_actions else 0 for i in range(15)]
+        mask = self._action_mask(agent, self._game_client.possible_actions)
         
         return {
             "Game": {
@@ -216,8 +250,30 @@ class CustomEnvironment(AECEnv):
                 "Money": self._game_client.game.players[agent].money,
                 "AssetMix": self._game_client.game.players[agent].assets.to_dict(),
             },
-            "action_mask": mask,
+            "action_mask":np.array(mask, dtype=np.int8),
         }
 
     def render(self):
         pass
+
+    def close(self):
+        super().close()
+        if self._game_client is not None:
+            self._game_client.close()
+
+    def action_space(self, agent) -> spaces.Space:
+        return ACTION_SPACE
+    
+    def observation_space(self, agent) -> spaces.Space:
+        return OBSERVATION_SPACE
+    
+    @property
+    def game(self) -> Game:
+        if self._game_client is None:
+            raise TypeError("Game client should be initialized")
+        return self._game_client.game
+    
+    def get_log(self) -> str:
+        if self._game_client is None:
+            raise TypeError("Game client should be initialized")
+        return self._game_client.get_log()
