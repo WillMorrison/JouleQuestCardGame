@@ -6,10 +6,13 @@ import itertools
 import random
 from typing import Final
 
+import numpy as np
 
 from game_client import ServerClient, GameClient
 from apiclient import joule_quest_api_client as client
 from apiclient.joule_quest_api_client.models import PlayerAction, Game, GameReason, GameStatus, PlayerActionType, PlayerActionAssetType
+
+from custom_environment.env import joulequest_env
 
 
 UDS_PATH: Final[str] = "/tmp/joulequest_api.sock"
@@ -35,7 +38,6 @@ def filter_stupid_actions(actions: list[PlayerAction]) -> list[PlayerAction]:
         return actions
 
 
-
 def play(cl: client.Client, num_players:int, less_stupid:bool, fetch_log:bool)->tuple[Game, str]:
     """Play a single game. Thread safe.
     
@@ -43,6 +45,7 @@ def play(cl: client.Client, num_players:int, less_stupid:bool, fetch_log:bool)->
         cl: API Client
         num_players: Number of players at the start of the game
         less_stupid: Whether to filter out bad action choices
+        fetch_log: Whether to retrieve the full game log at the end.
 
     Returns: A tuple of (Game, log)
     """
@@ -63,6 +66,53 @@ def play(cl: client.Client, num_players:int, less_stupid:bool, fetch_log:bool)->
         return (g.game, log)
 
 
+def mask_stupid_actions(original_mask: np.ndarray):
+    """Masks actions that are expected to always be bad choices."""
+    ok_actions = np.array([1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1], dtype=np.int8)
+    filtered = original_mask*ok_actions
+    if np.array_equal(filtered, np.zeros(filtered.shape)):
+        return original_mask
+    else:
+        return filtered
+
+
+def playEnv(cl: client.Client, num_players:int, less_stupid:bool, fetch_log:bool)->tuple[Game, str]:
+    """Play a single game using the PettingZoo environment.
+    
+    Args:
+        cl: API Client
+        num_players: Number of players at the start of the game
+        fetch_log: Whether to retrieve the full game log at the end.
+
+    Returns: A tuple of (Game, log)
+    """
+    with contextlib.closing(joulequest_env.JoulequestEnv(num_players, cl)) as env:
+        env.reset()
+        for agent in env.agent_iter():
+            observation, _, termination, truncation, _ = env.last()
+
+            if termination or truncation:
+                action = None
+            else:
+                if isinstance(observation, dict) and "action_mask" in observation:
+                    mask = observation["action_mask"]
+                    if less_stupid:
+                        mask = mask_stupid_actions(mask)
+                else:
+                    mask = None
+                action = env.action_space(agent).sample(mask) # this is where you would insert your policy
+
+            env.step(action)
+
+        # Get game data at the end
+        if fetch_log:
+            log = env.get_log()
+        else:
+            log = ""
+
+        return (env.game, log)
+
+
 def main():
     parser = argparse.ArgumentParser(
                     prog='JouleQuest server runner',
@@ -73,15 +123,20 @@ def main():
     parser.add_argument('--verbose', default=False, action='store_true', help='Whether to print the full game status and log after each game')
     parser.add_argument('--suppress_child_output', default=False, action='store_true', help='Whether to suppress the stdout and stderr of the child process')
     parser.add_argument('--less_stupid', default=False, action='store_true', help='Whether to filter out objectively stupid game choices')
+    parser.add_argument('--use_env', default=False, action='store_true', help='Whether to use the PettingZoo env.')
+    parser.add_argument('--parallel', default=1, type=int, help='How many workers in the thread pool')
     args = parser.parse_args()
 
     fs: list[futures.Future] = []
     outcomes: collections.Counter[tuple[GameStatus, GameReason]] = collections.Counter()
     with ServerClient(args.executable, socket_path=UDS_PATH, suppress_output=args.suppress_child_output) as cl:
-        with futures.ThreadPoolExecutor(max_workers=1) as tpe:
+        with futures.ThreadPoolExecutor(max_workers=args.parallel) as tpe:
             # Send game playing tasks to the worker threads
             for _ in range(args.games):
-                fs.append(tpe.submit(play, cl=cl, num_players=args.num_players, less_stupid=args.less_stupid, fetch_log=args.verbose))
+                if args.use_env:
+                    fs.append(tpe.submit(playEnv, cl=cl, num_players=args.num_players, less_stupid=args.less_stupid, fetch_log=args.verbose))
+                else:
+                    fs.append(tpe.submit(play, cl=cl, num_players=args.num_players, less_stupid=args.less_stupid, fetch_log=args.verbose))
             
             # Record summary stats and maybe print the outcome of each completed game
             for f in futures.as_completed(fs):
