@@ -488,7 +488,7 @@ func Test_GameState_applyPlayerAction_Build(t *testing.T) {
 	if gotMoney != wantMoney {
 		t.Errorf("Money = %d, want %d after %s action", gotMoney, wantMoney, action.Type.String())
 	}
-	gotMix := gameState.Players[0].getAssetMix()
+	gotMix := gameState.Players[0].AssetMix()
 	wantMix := assets.AssetMix{BatteriesArbitrage: 1}
 	if gotMix != wantMix {
 		t.Errorf("AssetMix = %+v, want %+v after %s action", gotMix, wantMix, action.Type.String())
@@ -525,7 +525,7 @@ func Test_GameState_applyPlayerAction_Scrap(t *testing.T) {
 	if gotMoney != wantMoney {
 		t.Errorf("Money = %d, want %d after %s action", gotMoney, wantMoney, action.Type.String())
 	}
-	gotMix := gameState.Players[0].getAssetMix()
+	gotMix := gameState.Players[0].AssetMix()
 	wantMix := assets.AssetMix{FossilsWholesale: 1}
 	if gotMix != wantMix {
 		t.Errorf("AssetMix = %+v, want %+v after %s action", gotMix, wantMix, action.Type.String())
@@ -562,7 +562,7 @@ func Test_GameState_applyPlayerAction_Takeover(t *testing.T) {
 	if gotMoney != wantMoney {
 		t.Errorf("Money = %d, want %d after %s action", gotMoney, wantMoney, action.Type.String())
 	}
-	gotMix := gameState.Players[0].getAssetMix()
+	gotMix := gameState.Players[0].AssetMix()
 	wantMix := assets.AssetMix{BatteriesArbitrage: 1}
 	if gotMix != wantMix {
 		t.Errorf("Player AssetMix = %+v, want %+v after %s action", gotMix, wantMix, action.Type.String())
@@ -644,7 +644,7 @@ func Test_GameState_applyPlayerAction_Pledge(t *testing.T) {
 	if gotMoney != wantMoney {
 		t.Errorf("Money = %d, want %d after %s action", gotMoney, wantMoney, action.Type.String())
 	}
-	gotMix := gameState.Players[0].getAssetMix()
+	gotMix := gameState.Players[0].AssetMix()
 	wantMix := assets.AssetMix{BatteriesArbitrage: 1, BatteriesCapacity: 2}
 	if gotMix != wantMix {
 		t.Errorf("AssetMix = %+v, want %+v after %s action", gotMix, wantMix, action.Type.String())

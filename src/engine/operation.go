@@ -121,7 +121,7 @@ func OperatePhase(gs *GameState) StateRunner {
 			playerPnL += gs.Params.PnL(a, gridOutcome.PriceVolatility, gs.CarbonEmissions, gridOutcome.AssetMix.CapacityAssets())
 		}
 		p.Money += playerPnL
-		pLogger.Event().WithKey("player_asset_mix", p.getAssetMix()).WithKey("player_PnL", playerPnL).WithKey("player_money", p.Money).With(GameLogEventMarketOutcome).Log()
+		pLogger.Event().WithKey("player_asset_mix", p.AssetMix()).WithKey("player_PnL", playerPnL).WithKey("player_money", p.Money).With(GameLogEventMarketOutcome).Log()
 
 		// Check player loss conditions
 		if p.Money < 0 {

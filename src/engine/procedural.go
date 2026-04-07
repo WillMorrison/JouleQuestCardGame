@@ -14,6 +14,15 @@ type ProceduralGameState struct {
 	gs GameState
 }
 
+func (pgs *ProceduralGameState) Reset(numPlayers int, gameParams params.Params, logger eventlog.Logger) error {
+	if err:=InitGame(&pgs.gs, numPlayers, gameParams, logger, nil, nil);  err != nil {
+		return err
+	}
+	pgs.s = StateMachineStateGameStart
+	pgs.runUntilBuildPhase()
+	return nil
+}
+
 func NewProceduralGame(numPlayers int, gameParams params.Params, logger eventlog.Logger) (*ProceduralGameState, error) {
 	gs, err := NewGame(numPlayers, gameParams, logger, nil, nil)
 	if err != nil {

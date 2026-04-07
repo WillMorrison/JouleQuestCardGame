@@ -72,7 +72,6 @@ func BuildPhase(gs *GameState) StateRunner {
 		p.isBuilding = true
 		numBuildingPlayers++
 		p.resetAllAssets()
-
 	}
 	for numBuildingPlayers > 0 {
 		actions := gs.possibleActions()
@@ -80,7 +79,7 @@ func BuildPhase(gs *GameState) StateRunner {
 			if gs.Params.TakeoverRule == params.TakeoverRuleForcedTakeover {
 				// game loss, assets in takeover pool that nobody can afford to take over
 				gs.SetGlobalLossWithReason(LossConditionUnownedTakeoverAssets)
-				takeoverMix := assets.AssetMixFrom(slices.Values(gs.TakeoverPool))
+				takeoverMix := gs.TakeoverAssetMix()
 				var money []int
 				for _, p := range gs.Players {
 					money = append(money, p.Money)
@@ -116,8 +115,8 @@ func (gs *GameState) possibleActions() []PlayerAction {
 		if !p.isBuilding {
 			continue
 		}
-		playerAssetMix := p.getAssetMix()
-		takeoverAssetMix := assets.AssetMixFrom(slices.Values(gs.TakeoverPool))
+		playerAssetMix := p.AssetMix()
+		takeoverAssetMix := gs.TakeoverAssetMix()
 		for _, at := range assets.Types {
 			if cost := gs.Params.BuildCost(at); cost <= p.Money {
 				actions = append(actions, PlayerAction{Type: ActionTypeBuildAsset, PlayerIndex: pi, AssetType: at, Cost: cost})

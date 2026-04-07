@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"slices"
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
 	"github.com/WillMorrison/JouleQuestCardGame/core"
@@ -22,7 +23,7 @@ type PlayerState struct {
 	isBuilding bool // Internal tracker of whether the player has finished the build round
 }
 
-func (ps PlayerState) getAssetMix() assets.AssetMix {
+func (ps PlayerState) AssetMix() assets.AssetMix {
 	var am assets.AssetMix
 	for _, a := range ps.Assets {
 		am.AddAsset(a)
@@ -41,7 +42,7 @@ func (ps PlayerState) MarshalJSON() ([]byte, error) {
 	var psj = playerStateJSON{
 		Status: ps.Status.String(),
 		Money:  ps.Money,
-		Assets: ps.getAssetMix(),
+		Assets: ps.AssetMix(),
 	}
 	if ps.Status != PlayerStatusActive {
 		psj.Reason = ps.Reason.String()
@@ -92,7 +93,7 @@ type GameState struct {
 	Params          params.Params
 	Logger          eventlog.Logger `json:"-"`
 	GetPlayerAction GetPlayerAction // callback when the game needs to pick the next player action
-	GameOverFunc func() // Callback function which is called when the game ends.
+	GameOverFunc    func()          // Callback function which is called when the game ends.
 }
 
 // allAssets iterates over assets in player portfolios and in the takeover pool
@@ -146,21 +147,33 @@ func (gs *GameState) movePlayerAssetsToTakeoverPool(pi int) {
 	gs.Players[pi].Assets = nil
 }
 
-// NewGame returns a new GameState ready to play
-func NewGame(numPlayers int, gameParams params.Params, logger eventlog.Logger, getAction GetPlayerAction, doneCallback func()) (*GameState, error) {
+func (gs GameState) TakeoverAssetMix() assets.AssetMix {
+	return assets.AssetMixFrom(slices.Values(gs.TakeoverPool))
+}
+
+// InitGame sets a GameState to the starting values for the given parameters and number of players.
+// It attempts to reuse already allocated slices to reduce garbage collector pressure.
+func InitGame(game *GameState, numPlayers int, gameParams params.Params, logger eventlog.Logger, getAction GetPlayerAction, doneCallback func()) error {
 	initialAssetsPerPlayer, ok := gameParams.StartingFossilAssetsPerPlayer[numPlayers]
 	if !ok {
-		return nil, fmt.Errorf("invalid number of players: %d", numPlayers)
+		return fmt.Errorf("invalid number of players: %d", numPlayers)
 	}
 
-	var game = GameState{
-		Status:          GameStatusOngoing,
-		Round:           0,
-		CarbonEmissions: 0,
-		Params:          gameParams,
-		Logger:          logger,
-		GetPlayerAction: getAction,
-		GameOverFunc: doneCallback,
+	game.Status = GameStatusOngoing
+	game.Reason = LossConditionNone
+	game.Round = 0
+	game.CarbonEmissions = 0
+	game.Params = gameParams
+	game.Logger = logger
+	game.GetPlayerAction = getAction
+	game.GameOverFunc = doneCallback
+
+	// Avoid reallocating slices where possible
+	if game.TakeoverPool != nil {
+		game.TakeoverPool = game.TakeoverPool[:0]
+	}
+	if game.Players != nil {
+		game.Players = game.Players[:0]
 	}
 
 	for range numPlayers {
@@ -176,5 +189,14 @@ func NewGame(numPlayers int, gameParams params.Params, logger eventlog.Logger, g
 
 	game.LastSnapshot = game.getSnapshot()
 
-	return &game, nil
+	return nil
+}
+
+// NewGame returns a new GameState ready to play
+func NewGame(numPlayers int, gameParams params.Params, logger eventlog.Logger, getAction GetPlayerAction, doneCallback func()) (*GameState, error) {
+	game := new(GameState)
+	if err := InitGame(game, numPlayers, gameParams, logger, getAction, doneCallback); err != nil {
+		return nil, err
+	}
+	return game, nil
 }
