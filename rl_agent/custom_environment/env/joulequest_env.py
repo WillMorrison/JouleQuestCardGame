@@ -10,8 +10,8 @@ from apiclient import joule_quest_api_client
 from apiclient.joule_quest_api_client.models import PlayerAction, PlayerActionAssetType, PlayerActionType, Game, GameStatus, GameReason, PlayerStatus
 from game_client import GameClient
 
-# The observation space for a single player
-OBSERVATION_SPACE = spaces.Dict({
+# The observation space for a single player's view of the game
+OBSERVATION_SPACE_INNER = spaces.Dict({
             "Game": spaces.Dict({
                 "Status": spaces.Discrete(3, dtype=np.int8), # Corresponds to engine.GameStatus
                 "Reason": spaces.Discrete(8, dtype=np.int8), # Corresponds to engine.LossCondition
@@ -37,8 +37,14 @@ OBSERVATION_SPACE = spaces.Dict({
                     "FossilsWholesale": spaces.Discrete(1024),
                     "FossilsCapacity": spaces.Discrete(1024),
                 }),
-           }),
-           "action_mask": spaces.MultiBinary(15)
+            }),
+        })
+
+# The observation space for a single player, including both game state and available actions.
+# Game state has been flattened so that it's possible to use for a neural network.
+OBSERVATION_SPACE = spaces.Dict({
+            "observation": spaces.flatten_space(OBSERVATION_SPACE_INNER),
+            "action_mask": spaces.MultiBinary(15)
         })
 
 # (build, scrap, takeover, takeover+scrap)x(renewable, battery, fossil) + (pledge)x(battery, fossil) + (finished)
@@ -236,20 +242,22 @@ class JoulequestEnv(AECEnv):
         mask = self._action_mask(agent, self._game_client.possible_actions)
         
         return {
-            "Game": {
-                "Status": GameStatusToInt(self._game_client.game.status),
-                "Reason": GameReasontoInt(self._game_client.game.reason),
-                "Round": self._game_client.game.round_,
-                "EmissionsCounter": self._game_client.game.emissions_counter,
-                "LastAssetMix": self._game_client.game.last_round_snapshot.asset_mix.to_dict(),
-                "LastGridStability": self._game_client.game.last_round_snapshot.grid_stability,
-                "LastPriceVolatility": self._game_client.game.last_round_snapshot.price_volatility,
-            },
-            "Player": {
-                "Status": PlayerStatusToInt(self._game_client.game.players[agent].status),
-                "Money": self._game_client.game.players[agent].money,
-                "AssetMix": self._game_client.game.players[agent].assets.to_dict(),
-            },
+            "observation": spaces.flatten(OBSERVATION_SPACE_INNER, {
+                "Game": {
+                    "Status": GameStatusToInt(self._game_client.game.status),
+                    "Reason": GameReasontoInt(self._game_client.game.reason),
+                    "Round": self._game_client.game.round_,
+                    "EmissionsCounter": self._game_client.game.emissions_counter,
+                    "LastAssetMix": self._game_client.game.last_round_snapshot.asset_mix.to_dict(),
+                    "LastGridStability": self._game_client.game.last_round_snapshot.grid_stability,
+                    "LastPriceVolatility": self._game_client.game.last_round_snapshot.price_volatility,
+                },
+                "Player": {
+                    "Status": PlayerStatusToInt(self._game_client.game.players[agent].status),
+                    "Money": self._game_client.game.players[agent].money,
+                    "AssetMix": self._game_client.game.players[agent].assets.to_dict(),
+                },
+            }),
             "action_mask":np.array(mask, dtype=np.int8),
         }
 
