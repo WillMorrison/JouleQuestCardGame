@@ -130,6 +130,8 @@ def env(num_players: int, client: joule_quest_api_client.Client):
     env = wrappers.OrderEnforcingWrapper(env)
     return env
 
+agentType = str
+
 class JoulequestEnv(AECEnv):
     metadata = {
         "name": "joulequest_environment_v0",
@@ -145,18 +147,18 @@ class JoulequestEnv(AECEnv):
         self._api_client = client
         self._game_client : GameClient|None = None
 
-        self.possible_agents: list[str] = [_agent_name(i) for i in range(num_players)]
-        self._agent_index: dict[str, int] = {_agent_name(i): i for i in range(num_players)}
+        self.possible_agents: list[agentType] = [_agent_name(i) for i in range(num_players)]
+        self._agent_index: dict[agentType, int] = {_agent_name(i): i for i in range(num_players)}
         self.observation_spaces = {agent: OBSERVATION_SPACE for agent in self.possible_agents}
         self.action_spaces = {agent: ACTION_SPACE for agent in self.possible_agents}
 
     @property
-    def _active_agents(self) -> list[str]:
+    def _active_agents(self) -> list[agentType]:
         if self._game_client is None:
             return []
         return list(set(_agent_name(a.player_index) for a in self._game_client.possible_actions))
     
-    def _select_active_agent(self) -> str:
+    def _select_active_agent(self) -> agentType:
         return self.np_random.choice(self._active_agents)
 
     def reset(self, seed=None, options=None):
@@ -166,14 +168,14 @@ class JoulequestEnv(AECEnv):
 
         # Unlike gymnasium's Env, the environment is responsible for setting the random seed explicitly.
         self.np_random, self.np_random_seed = seeding.np_random(seed)
-        self.agents: list[str] = self.possible_agents[:]
-        self.rewards = {agent: 0 for agent in self.agents}
-        self._cumulative_rewards = {agent: 0 for agent in self.agents}
-        self.terminations = {agent: False for agent in self.agents}
-        self.truncations = {agent: False for agent in self.agents}
+        self.agents: list[agentType] = self.possible_agents[:]
+        self.rewards: dict[agentType, float] = {agent: 0 for agent in self.agents}
+        self._cumulative_rewards: dict[agentType, float] = {agent: 0 for agent in self.agents}
+        self.terminations: dict[agentType, bool] = {agent: False for agent in self.agents}
+        self.truncations: dict[agentType, bool] = {agent: False for agent in self.agents}
         self.infos = {agent: {} for agent in self.agents}
         self.observations = {agent: {} for agent in self.agents}
-        self.agent_selection: str = self._select_active_agent()
+        self.agent_selection: agentType = self._select_active_agent()
 
     def step(self, action:int|None):
         if self._game_client is None:
@@ -189,7 +191,7 @@ class JoulequestEnv(AECEnv):
         # seems weird, but makes the api_test pass
         self._cumulative_rewards[self.agent_selection] = 0
 
-        possible_actions = [a for a in self._game_client.possible_actions if a.player_index==self.agent_selection]
+        possible_actions = [a for a in self._game_client.possible_actions if a.player_index==self._agent_index[self.agent_selection]]
         if not possible_actions:
             # Chosen agent can't do anything, move along
             self.agent_selection = self._select_active_agent()
@@ -202,36 +204,36 @@ class JoulequestEnv(AECEnv):
         is_over = False
         if self._game_client.game.status == GameStatus.LOSS:
             is_over = True
-            for a, _ in enumerate(self.agents):
+            for a in self.agents:
                 self.rewards[a] -= 1000  # Large collective penalty
                 self.terminations[a] = True
         elif self._game_client.game.status == GameStatus.WIN:
             is_over = True
-            for a, _ in enumerate(self.agents):
+            for a_i, a in enumerate(self.agents):
                 self.rewards[a] += 100 # Reward for Winning!
-                self.rewards[a] += self._game_client.game.players[a].money # Reward for successful capitalism
+                self.rewards[a] += self._game_client.game.players[a_i].money # Reward for successful capitalism
                 self.terminations[a] = True
 
         # Handle player loss for active agents
-        for a, _ in enumerate(self.agents):
-            if self._game_client.game.players[a].status == PlayerStatus.LOST:
+        for a_i, a in enumerate(self.agents):
+            if self._game_client.game.players[a_i].status == PlayerStatus.LOST:
                 self.rewards[a] -= 1000  # Large penalty for losing
                 self.terminations[a] = True
 
         # Incremental rewards if the active agent is still in the game
         player = self._game_client.game.players[self._agent_index[self.agent_selection]]
         if player.status != PlayerStatus.LOST:
-            self.rewards[self._agent_index[self.agent_selection]] += 0.001*player.money # Hint that more money is good
-            self.rewards[self._agent_index[self.agent_selection]] -= 0.001*self._game_client.game.emissions_counter # Hint that emissions counter going up is bad
+            self.rewards[self.agent_selection] += 0.001*player.money # Hint that more money is good
+            self.rewards[self.agent_selection] -= 0.001*self._game_client.game.emissions_counter # Hint that emissions counter going up is bad
 
         if not is_over:
             self.agent_selection = self._select_active_agent()
 
         self._accumulate_rewards()
 
-    def _action_mask(self, agent, possible_actions: list[PlayerAction]) -> list[int]:
+    def _action_mask(self, agent_index:int, possible_actions: list[PlayerAction]) -> list[int]:
         # Get valid action ints for agent (e.g., [0, 4, 7])
-        valid_actions = [PlayerActionToInt(a) for a in possible_actions if a.player_index==agent]
+        valid_actions = [PlayerActionToInt(a) for a in possible_actions if a.player_index==agent_index]
         
         # Create a binary mask of 0s (forbidden) and 1s (allowed)
         mask = [1 if i in valid_actions else 0 for i in range(15)]
@@ -239,12 +241,12 @@ class JoulequestEnv(AECEnv):
         return mask
 
 
-    def observe(self, agent:str):
+    def observe(self, agent: agentType):
         if self._game_client is None:
             raise TypeError("Game client should be initialized")
         agent_index = self._agent_index[agent]
         
-        mask = self._action_mask(agent, self._game_client.possible_actions)
+        mask = self._action_mask(agent_index, self._game_client.possible_actions)
         
         return {
             "observation": spaces.flatten(OBSERVATION_SPACE_INNER, {
@@ -274,10 +276,10 @@ class JoulequestEnv(AECEnv):
         if self._game_client is not None:
             self._game_client.close()
 
-    def action_space(self, agent:str) -> spaces.Space:
+    def action_space(self, agent: agentType) -> spaces.Space:
         return ACTION_SPACE
     
-    def observation_space(self, agent:str) -> spaces.Space:
+    def observation_space(self, agent: agentType) -> spaces.Space:
         return OBSERVATION_SPACE
     
     @property
