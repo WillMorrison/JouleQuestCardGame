@@ -8,3 +8,5 @@ go build ./cmd/rest_api
 popd
 uv run main.py --executable ../src/rest_api --less_stupid --games 100
 ```
+
+To run the API test for the joulequest PettingZoo environment

@@ -12,7 +12,7 @@ from game_client import ServerClient, GameClient
 from apiclient import joule_quest_api_client as client
 from apiclient.joule_quest_api_client.models import PlayerAction, Game, GameReason, GameStatus, PlayerActionType, PlayerActionAssetType
 
-from custom_environment.env import joulequest_env
+import joulequest_env
 
 
 UDS_PATH: Final[str] = "/tmp/joulequest_api.sock"
