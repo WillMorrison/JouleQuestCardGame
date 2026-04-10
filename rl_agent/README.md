@@ -10,3 +10,15 @@ uv run main.py --executable ../src/rest_api --less_stupid --games 100
 ```
 
 To run the API test for the joulequest PettingZoo environment
+
+```sh
+uv run -m joulequest_env.env_test --executable ../src/rest_api
+```
+
+To train a policy model
+
+```sh
+uv run train.py --executable ../src/rest_api --tensorboard_dir log
+
+uv run tensorboard --logdir 'log'
+```

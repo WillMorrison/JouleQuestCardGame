@@ -1,0 +1,3 @@
+# Model training outputs
+/log/
+agent.pt
