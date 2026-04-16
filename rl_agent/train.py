@@ -1,12 +1,12 @@
 import argparse
 import os
-from typing import Callable
+from typing import Any, Callable
 
 import numpy as np
 
-from tianshou.data import Collector, VectorReplayBuffer
-from tianshou.env import DummyVectorEnv, PettingZooEnv
-from tianshou.policy import MultiAgentPolicyManager, DQNPolicy
+from tianshou.data import Collector, PrioritizedVectorReplayBuffer, Batch, ReplayBuffer
+from tianshou.env import DummyVectorEnv, PettingZooEnv, BaseVectorEnv
+from tianshou.policy import MultiAgentPolicyManager, DQNPolicy, BasePolicy
 from tianshou.trainer import OffpolicyTrainer
 from tianshou.utils.net.common import Net
 from tianshou.utils import TensorboardLogger, LazyLogger
@@ -18,6 +18,30 @@ from torch.utils.tensorboard import SummaryWriter
 from game_client import ServerClient
 import joulequest_env
 
+
+class RandomMaskedPolicy(BasePolicy):
+    def forward(self, batch, state=None, **kwargs):
+        # Extract the mask from the observation batch
+        mask = batch.obs.mask
+
+        # Filter out actions considered "stupid" by applying a fixed mask, but only if it doesn't completely eliminate all options
+        ok_actions = np.array([1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1], dtype=np.int8)
+        filtered = mask*ok_actions
+        if not np.array_equal(filtered, np.zeros(filtered.shape)):
+                mask = filtered
+
+        # Generate random logits, then set masked actions to a very low number
+        logits = torch.randn(mask.shape)
+        logits[mask == 0] = -1e10 
+        return Batch(act=logits.argmax(dim=-1), state=state)
+    
+    def learn(self, batch: Batch, **kwargs: Any) -> dict[str, Any]:
+        return {}
+    
+def preheat_buffer(buffer: ReplayBuffer, env: BaseVectorEnv):
+    """Preheat by filling the buffer with random actions, respecting the action masks and avoiding stupid actions when possible."""
+    warmup_collector = Collector(RandomMaskedPolicy(), env, buffer)
+    warmup_collector.collect(n_episode=1000, random=True)
 
 def train(get_env: Callable[[], PettingZooEnv], writer: SummaryWriter|None = None):
     env = get_env()
@@ -37,13 +61,15 @@ def train(get_env: Callable[[], PettingZooEnv], writer: SummaryWriter|None = Non
     # This policy will be shared by all agents (Parameter Sharing)
     shared_policy = DQNPolicy(
         model=net, 
-        optim=optim, 
+        optim=optim,
+        discount_factor=0.995, # Higher discount factor for longer-term rewards
+        estimation_step=20, # How many steps to look ahead when calculating the target Q value. Higher means better long-term planning but more variance.
     )
     policy = MultiAgentPolicyManager([shared_policy] * len(env.agents), env)
 
     # 3. DATA COLLECTION
-    train_envs = DummyVectorEnv([get_env for _ in range(4)])
-    test_envs = DummyVectorEnv([get_env])
+    train_envs = DummyVectorEnv([get_env for _ in range(2)])
+    test_envs = DummyVectorEnv([get_env for _ in range(2)])
     
     seed = 1
     np.random.seed(seed)
@@ -51,8 +77,23 @@ def train(get_env: Callable[[], PettingZooEnv], writer: SummaryWriter|None = Non
     train_envs.seed(seed)
     test_envs.seed(seed)
 
-    train_collector = Collector(policy, train_envs, VectorReplayBuffer(20000, len(train_envs)), exploration_noise=True)
+    train_buffer = PrioritizedVectorReplayBuffer(160000, len(train_envs), alpha=0.6, beta=0.4, weight_norm=True)
+    train_collector = Collector(policy, train_envs, train_buffer, exploration_noise=True)
     test_collector = Collector(policy, test_envs, exploration_noise=True)
+
+    preheat_buffer(train_buffer, train_envs)
+
+    max_epoch = 250
+    def train_fn(epoch, env_step):
+        # Epsilon decay from 0.4 to 0.1 over the course of training
+        # This controls the exploration rate of the policy. Higher epsilon means more random actions.
+        eps = 0.4 - 0.3 * (epoch / max_epoch)
+        shared_policy.set_eps(eps)
+
+        # Beta increase from 0.4 to 1.0 over the course of training
+        # This controls the importance sampling weights for the prioritized replay buffer. Higher beta means more correction for the bias introduced by prioritization.
+        beta = 0.4 + 0.6 * (epoch / max_epoch)
+        train_buffer.set_beta(beta)
 
     # 4. Logging
 
@@ -66,15 +107,15 @@ def train(get_env: Callable[[], PettingZooEnv], writer: SummaryWriter|None = Non
         policy=policy,
         train_collector=train_collector,
         test_collector=test_collector,
-        max_epoch=2,
-        step_per_epoch=128,
-        step_per_collect=16,
+        max_epoch=max_epoch,
+        step_per_epoch=10000,
+        step_per_collect=100,
         episode_per_test=100,
-        batch_size=64,
+        batch_size=200,
         update_per_step=0.1,
-        train_fn=lambda epoch, env_step: shared_policy.set_eps(0.1),
-        test_fn=lambda epoch, env_step: shared_policy.set_eps(0.05),
-        stop_fn=lambda mean_rewards: mean_rewards >= 10,
+        train_fn=train_fn,
+        test_fn=lambda epoch, env_step: shared_policy.set_eps(0.01),
+        stop_fn=lambda mean_rewards: mean_rewards >= 50,
         logger = logger,
     ).run()
 
