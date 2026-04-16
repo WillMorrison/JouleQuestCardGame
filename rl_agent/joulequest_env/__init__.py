@@ -208,7 +208,13 @@ class JoulequestEnv(AECEnv):
             # Chosen agent can't do anything, move along
             self.agent_selection = self._select_active_agent()
             return
-        chosen_action = IntToPlayerAction(action, possible_actions)
+        try:
+            chosen_action = IntToPlayerAction(action, possible_actions)
+        except KeyError:
+            # Illegal action chosen, penalize and move along
+            self.rewards[self.agent_selection] -= 10
+            self.agent_selection = self._select_active_agent()
+            return
 
         self._game_client.send_action(chosen_action)
 
@@ -222,7 +228,7 @@ class JoulequestEnv(AECEnv):
         elif self._game_client.game.status == GameStatus.WIN:
             is_over = True
             for a_i, a in enumerate(self.agents):
-                self.rewards[a] += 100 # Reward for Winning!
+                self.rewards[a] += 1000 # Reward for Winning!
                 self.rewards[a] += self._game_client.game.players[a_i].money # Reward for successful capitalism
                 self.terminations[a] = True
 
@@ -235,8 +241,7 @@ class JoulequestEnv(AECEnv):
         # Incremental rewards if the active agent is still in the game
         player = self._game_client.game.players[self._agent_index[self.agent_selection]]
         if player.status != PlayerStatus.LOST:
-            self.rewards[self.agent_selection] += 0.001*player.money # Hint that more money is good
-            self.rewards[self.agent_selection] -= 0.001*self._game_client.game.emissions_counter # Hint that emissions counter going up is bad
+            self.rewards[self.agent_selection] += 0.01 # Survival reward
 
         if not is_over:
             self.agent_selection = self._select_active_agent()
