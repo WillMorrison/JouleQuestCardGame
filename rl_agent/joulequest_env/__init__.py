@@ -11,41 +11,53 @@ from apiclient.joule_quest_api_client.models import PlayerAction, PlayerActionAs
 from game_client import GameClient
 
 # The observation space for a single player's view of the game
-OBSERVATION_SPACE_INNER = spaces.Dict({
-            "Game": spaces.Dict({
-                "Status": spaces.Discrete(3, dtype=np.int8), # Corresponds to engine.GameStatus
-                "Reason": spaces.Discrete(8, dtype=np.int8), # Corresponds to engine.LossCondition
-                "Round": spaces.Discrete(1024),
-                "EmissionsCounter": spaces.Discrete(1024),
-                "LastAssetMix": spaces.Dict({
-                    "Renewables": spaces.Discrete(1024),
-                    "BatteriesArbitrage": spaces.Discrete(1024),
-                    "BatteriesCapacity": spaces.Discrete(1024),
-                    "FossilsWholesale": spaces.Discrete(1024),
-                    "FossilsCapacity": spaces.Discrete(1024),
-                }),
-                "LastGridStability": spaces.Discrete(4, dtype=np.int8), # Corresponds to core.GridStability
-                "LastPriceVolatility": spaces.Discrete(4, dtype=np.int8), # Corresponds to core.PriceVolatility
-            }),
-            "Player": spaces.Dict({
-                "Status": spaces.Discrete(2, dtype=np.int8), # Corresponds to engine.PlayerStatus
-                "Money": spaces.Discrete(65535, start=-1024),
-                "AssetMix": spaces.Dict({
-                    "Renewables": spaces.Discrete(1024),
-                    "BatteriesArbitrage": spaces.Discrete(1024),
-                    "BatteriesCapacity": spaces.Discrete(1024),
-                    "FossilsWholesale": spaces.Discrete(1024),
-                    "FossilsCapacity": spaces.Discrete(1024),
-                }),
-            }),
-        })
+# Flattened to a vector of scalars to avoid large one-hot encodings
+OBSERVATION_LOW = np.array([
+    0,  # Game_Status
+    0,  # Game_Reason
+    0,  # Game_Round
+    0,  # Game_EmissionsCounter
+    0,  # Game_LastAssetMix_Renewables
+    0,  # Game_LastAssetMix_BatteriesArbitrage
+    0,  # Game_LastAssetMix_BatteriesCapacity
+    0,  # Game_LastAssetMix_FossilsWholesale
+    0,  # Game_LastAssetMix_FossilsCapacity
+    0,  # Game_LastGridStability
+    0,  # Game_LastPriceVolatility
+    0,  # Player_Status
+    -1024,  # Player_Money
+    0,  # Player_AssetMix_Renewables
+    0,  # Player_AssetMix_BatteriesArbitrage
+    0,  # Player_AssetMix_BatteriesCapacity
+    0,  # Player_AssetMix_FossilsWholesale
+    0,  # Player_AssetMix_FossilsCapacity
+], dtype=np.int32)
 
-# The observation space for a single player, including both game state and available actions.
-# Game state has been flattened so that it's possible to use for a neural network.
+OBSERVATION_HIGH = np.array([
+    2,  # Game_Status
+    7,  # Game_Reason
+    1023,  # Game_Round
+    1023,  # Game_EmissionsCounter
+    1023,  # Game_LastAssetMix_Renewables
+    1023,  # Game_LastAssetMix_BatteriesArbitrage
+    1023,  # Game_LastAssetMix_BatteriesCapacity
+    1023,  # Game_LastAssetMix_FossilsWholesale
+    1023,  # Game_LastAssetMix_FossilsCapacity
+    3,  # Game_LastGridStability
+    3,  # Game_LastPriceVolatility
+    1,  # Player_Status
+    65535 - 1024 - 1,  # Player_Money (approx)
+    1023,  # Player_AssetMix_Renewables
+    1023,  # Player_AssetMix_BatteriesArbitrage
+    1023,  # Player_AssetMix_BatteriesCapacity
+    1023,  # Player_AssetMix_FossilsWholesale
+    1023,  # Player_AssetMix_FossilsCapacity
+], dtype=np.int32)
+
 OBSERVATION_SPACE = spaces.Dict({
-            "observation": spaces.flatten_space(OBSERVATION_SPACE_INNER),
-            "action_mask": spaces.MultiBinary(15)
-        })
+    "observation": spaces.Box(low=OBSERVATION_LOW, high=OBSERVATION_HIGH, dtype=np.int32),
+    "action_mask": spaces.MultiBinary(15)
+})
 
 # (build, scrap, takeover, takeover+scrap)x(renewable, battery, fossil) + (pledge)x(battery, fossil) + (finished)
 ACTION_SPACE = spaces.Discrete(15)
@@ -248,24 +260,34 @@ class JoulequestEnv(AECEnv):
         
         mask = self._action_mask(agent_index, self._game_client.possible_actions)
         
+        game = self._game_client.game
+        player = game.players[agent_index]
+        last_snapshot = game.last_round_snapshot
+        
+        observation = np.array([
+            GameStatusToInt(game.status),
+            GameReasontoInt(game.reason),
+            game.round_,
+            game.emissions_counter,
+            last_snapshot.asset_mix.renewables,
+            last_snapshot.asset_mix.batteries_arbitrage,
+            last_snapshot.asset_mix.batteries_capacity,
+            last_snapshot.asset_mix.fossils_wholesale,
+            last_snapshot.asset_mix.fossils_capacity,
+            last_snapshot.grid_stability,
+            last_snapshot.price_volatility,
+            PlayerStatusToInt(player.status),
+            player.money,
+            player.assets.renewables,
+            player.assets.batteries_arbitrage,
+            player.assets.batteries_capacity,
+            player.assets.fossils_wholesale,
+            player.assets.fossils_capacity,
+        ], dtype=np.float32)
+        
         return {
-            "observation": spaces.flatten(OBSERVATION_SPACE_INNER, {
-                "Game": {
-                    "Status": GameStatusToInt(self._game_client.game.status),
-                    "Reason": GameReasontoInt(self._game_client.game.reason),
-                    "Round": self._game_client.game.round_,
-                    "EmissionsCounter": self._game_client.game.emissions_counter,
-                    "LastAssetMix": self._game_client.game.last_round_snapshot.asset_mix.to_dict(),
-                    "LastGridStability": self._game_client.game.last_round_snapshot.grid_stability,
-                    "LastPriceVolatility": self._game_client.game.last_round_snapshot.price_volatility,
-                },
-                "Player": {
-                    "Status": PlayerStatusToInt(self._game_client.game.players[agent_index].status),
-                    "Money": self._game_client.game.players[agent_index].money,
-                    "AssetMix": self._game_client.game.players[agent_index].assets.to_dict(),
-                },
-            }),
-            "action_mask":np.array(mask, dtype=np.int8),
+            "observation": observation,
+            "action_mask": np.array(mask, dtype=np.int8),
         }
 
     def render(self):
