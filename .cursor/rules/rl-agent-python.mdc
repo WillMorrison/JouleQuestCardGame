@@ -1,0 +1,10 @@
+---
+description: General Python for rl_agent — use uv for packages and scripts
+alwaysApply: false
+globs: "rl_agent/**"
+---
+
+# `rl_agent/` Python
+
+- Use **uv** for dependency management (`uv sync`, `uv add`, etc.) and for **running Python** in this directory (scripts, tests, tools).
+- Prefer `uv run …` so the project environment is explicit and reproducible.

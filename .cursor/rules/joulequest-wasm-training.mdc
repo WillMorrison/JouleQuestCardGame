@@ -1,0 +1,38 @@
+---
+description: WASM training bridge — Go WASI constraints, Python wasmtime stepping, parity vs OpenAPI-visible state
+alwaysApply: false
+globs: "**/*.go,rl_agent/**/*.py,.cursor/plans/*wasm*.md"
+---
+
+# WASM training interface (JouleQuest)
+
+Scope: work on the **in-process WASM path** for RL training (compact engine, WASI exports, Python wasmtime client). Not generic project advice.
+
+Full motivation and interface shape: [WASM_TRAINING_INTERFACE.md](../../WASM_TRAINING_INTERFACE.md) at repo root.
+
+## Go (WASI / compact engine / `//go:wasmexport`)
+
+- **No** goroutines, channels, or `select`. Single-threaded; each Python worker holds one module instance and plays games serially.
+- **Avoid allocations** on hot paths where practical; avoid `fmt` and string formatting in exported WASM entrypoints.
+- **Exports**: use `//go:wasmexport` with **WASM-friendly signatures** — fixed-size integers (`int32` / `uint32` as appropriate). Prefer **one `int32` return** per export (e.g. value or error code), **integer parameters only**, matching the host embedding contract.
+- **Globals**: one documented **singleton game** and **singleton params** in the WASM library package is intentional.
+- **`init`**: do not rely on `init` for background work or non-deterministic setup.
+
+## Python bridge (`rl_agent/`, WASM path only)
+
+- For package management and `uv run`, follow [rl-agent-python.mdc](rl-agent-python.mdc) (scoped to `rl_agent/`).
+- Game stepping for the **WASM training client** targets **wasmtime** (or the chosen WASM runtime), not httpx/OpenAPI, once the bridge is implemented.
+
+## Parity tests vs reference `GameState`
+
+`ProceduralGameState` / `GameState` are **legacy** of exploratory design and may have quirks (slice ordering, global RNG, etc.).
+
+- **Ground truth** for parity is the **training-observable surface**: what `rest_api` exposes (see `stateResponse` in `src/cmd/rest_api/main.go`) — status, reason, round, emissions, players (including holdings as `assets.AssetMix`), last-round snapshot, **`TakeoverPool` as `assets.AssetMix`**. RL code does not see per-asset ordering in the pool.
+- The eventual WASM module should expose **the same logical fields** as scalars/bitfields.
+- If parity fails and the cause looks like **order dependence**, **`math/rand`**, or other reference-only behavior: **stop and ask the project owner** before weakening tests or adding hacks; the owner may change the Go reference implementation so parity stays honest.
+
+## Takeover pool (canonical model)
+
+- Model the pool as **one `AssetMix`-shaped multiset** (five buckets). Order does not matter.
+- `TakeoverRuleForcedTakeover`: pool must be empty before finishing build when the rules say so; same outcomes as today’s rules.
+- `TakeoverRuleVirtualOwner`: pool counts feed grid/emissions; mode split in buckets still matters for those assets.

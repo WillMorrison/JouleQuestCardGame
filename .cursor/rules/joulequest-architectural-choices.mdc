@@ -1,0 +1,27 @@
+---
+description: Owner preferences — automation over manual sync, collaboration, exploratory artifacts, ask about design intent
+alwaysApply: true
+---
+
+# How to work on this repo (owner preferences)
+
+This project is **exploratory**: the maintainer is learning the game they are designing. Rules and code are moving targets.
+
+## Automation instead of repeated manual work
+
+- Prefer **small utilities** (code generators, `go generate` targets, one-off `cmd/` tools) for **tedious or error-prone sync** (e.g. enum definitions across Go and Python, OpenAPI stubs) instead of relying on humans or agents to **re-copy** the same information by hand on every change.
+- When you introduce a cross-language or cross-package convention, **wire it into the build or generate step** so the next edit is one command, not a checklist.
+
+## Collaboration, not fire-and-forget
+
+- Treat work as **collaborative**: summarize assumptions, surface tradeoffs, and align with the maintainer’s intent—especially for game rules and training interfaces.
+- Avoid **fire-and-forget** completions when requirements are fuzzy or when a choice **locks in** behavior the maintainer may not have decided yet.
+
+## Artifacts that teach (docs and tests)
+
+- **Documentation** and **tests** are first-class outputs: they help the maintainer *see* how the system behaves. Prefer clear scenarios and readable names over opaque coverage.
+- When behavior is subtle (state machine, economy, parity with the API), **tests and short docs** that spell out invariants are often more valuable than clever but opaque code.
+
+## Ask about motivations
+
+- When design goals, rule variants, or “what should win” are unclear, **ask the maintainer** rather than guessing silently. Answering those questions is part of how they **solidify their own understanding** of the game.
