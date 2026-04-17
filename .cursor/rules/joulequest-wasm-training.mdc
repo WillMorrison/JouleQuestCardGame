@@ -1,5 +1,5 @@
 ---
-description: WASM training bridge — Go WASI constraints, Python wasmtime stepping, parity vs OpenAPI-visible state
+description: WASM training bridge — compact/ TinyGo WASM constraints, Python wasmtime stepping, parity vs OpenAPI surface
 alwaysApply: false
 globs: "**/*.go,rl_agent/**/*.py,.cursor/plans/*wasm*.md"
 ---
@@ -10,13 +10,17 @@ Scope: work on the **in-process WASM path** for RL training (compact engine, WAS
 
 Full motivation and interface shape: [WASM_TRAINING_INTERFACE.md](../../WASM_TRAINING_INTERFACE.md) at repo root.
 
-## Go (WASI / compact engine / `//go:wasmexport`)
+## Go (TinyGo WASM / compact engine)
 
+- Training/WASM game logic lives under **`src/compact/`** (`compact/params`, `compact/game`; later `compact/client` for exports). Prefer extending that tree over growing WASM-only code inside `engine/`.
+- **TinyGo (recent release, ≥ 0.34)** is the planned compiler for the training WASM binary ([releases](https://github.com/tinygo-org/tinygo/releases)). Use **reactor-style** builds with **`-target=wasm-unknown`** (see upstream [hello-wasm-unknown](https://github.com/tinygo-org/tinygo/blob/v0.40.1/src/examples/hello-wasm-unknown/main.go)). Avoid **`//go:export`** / legacy command-style WASM patterns for new code; prefer **`//go:wasmexport`** (supported in TinyGo since 0.34) so exports stay **source-aligned** with `gc` Go’s wasmexport story ([Go blog](https://go.dev/blog/wasmexport)).
+- Write code that stays **TinyGo-compatible**: avoid packages or constructs TinyGo does not support or only partially supports ([stdlib / language support](https://tinygo.org/docs/reference/lang-support/stdlib/)). Prefer **`core`**, **`assets`**, **`params`**, and **`compact/*`** over **`engine`** inside the compact subtree so the WASM build does not pull the full interactive engine graph.
 - **No** goroutines, channels, or `select`. Single-threaded; each Python worker holds one module instance and plays games serially.
 - **Avoid allocations** on hot paths where practical; avoid `fmt` and string formatting in exported WASM entrypoints.
 - **Exports**: use `//go:wasmexport` with **WASM-friendly signatures** — fixed-size integers (`int32` / `uint32` as appropriate). Prefer **one `int32` return** per export (e.g. value or error code), **integer parameters only**, matching the host embedding contract.
 - **Globals**: one documented **singleton game** and **singleton params** in the WASM library package is intentional.
 - **`init`**: do not rely on `init` for background work or non-deterministic setup.
+- **Package dependencies**: avoid depending on the `eventlog` package in anything other than tests under `compact/`, including indirectly via the `engine` package, to avoid pulling in TinyGo-incompatible dependencies like `encoding/json`. **Follow-up:** move shared enums from `engine` into `core` so `compact/game` can use one definition (see [WASM_TRAINING_INTERFACE.md](../../WASM_TRAINING_INTERFACE.md) § follow-up).
 
 ## Python bridge (`rl_agent/`, WASM path only)
 

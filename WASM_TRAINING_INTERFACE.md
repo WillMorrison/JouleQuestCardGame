@@ -8,7 +8,7 @@ Training uses Python in [`rl_agent/`](rl_agent/) and today talks to the Go game 
 
 ## Goal
 
-Provide a **similar conceptual API** for Python as the OpenAPI server (reset game, submit actions, read state and legal actions), but backed by a **WASI module** loaded in-process (e.g. **wasmtime**), with **scalar** host calls instead of REST bodies.
+Provide a **similar conceptual API** for Python as the OpenAPI server (reset game, submit actions, read state and legal actions), but backed by a **WebAssembly module** (built with **TinyGo**, e.g. **`wasm-unknown`** reactor target) loaded in-process (e.g. **wasmtime**), with **scalar** host calls instead of REST bodies.
 
 ## Architectural approach
 
@@ -24,7 +24,7 @@ flowchart LR
   subgraph target [Target]
     Py2[PettingZoo / training]
     GC2[GameClientWasm + wasmtime]
-    Wasm[JouleQuest WASI module]
+    Wasm[JouleQuest Wasm module]
     Eng2[Compact alloc-light engine]
     Py2 --> GC2 --> Wasm --> Eng2
   end
@@ -65,15 +65,25 @@ Errors map to **integer codes** (invalid action, wrong phase, bad index, etc.), 
 - **[`TakeoverRuleVirtualOwner`](src/params/params.go)**: unowned pool assets contribute to **grid / emissions**; the **five-bucket** mix (including wholesale vs capacity) matters for those calculations.
 - **Takeover into a portfolio**: assets enter the player’s portfolio in **default mode**, consistent with current `assets.New` behavior after takeover.
 
-## Building the module (Go 1.24+)
+## Building the module (TinyGo)
 
-The implementation will use Go’s **WASI** port and **`//go:wasmexport`** for exported functions, built as a **reactor** (library-style module) so the host can call exports repeatedly after a single initialization.
+The **planned** toolchain for the training WASM binary is a **recent [TinyGo](https://tinygo.org/)** release (see [TinyGo releases](https://github.com/tinygo-org/tinygo/releases)), for **small modules** and a **stricter, embed-friendly** subset of Go than the main `gc` compiler’s WASI port.
 
-Authoritative upstream documentation:
+### `//go:wasmexport` (aligned with `gc` Go)
 
-- [Extensible Wasm Applications with Go](https://go.dev/blog/wasmexport) — `//go:wasmexport`, `GOOS=wasip1 GOARCH=wasm`, and **`-buildmode=c-shared`** for a reactor; the host must call **`_initialize`** before invoking exports.
+Since **TinyGo 0.34**, TinyGo supports **`//go:wasmexport`** the same way as upstream Go, so export signatures can stay **source-compatible** with a `GOOS=wasip1` / `GOARCH=wasm` `gc` build for the same entrypoints ([Extensible Wasm Applications with Go](https://go.dev/blog/wasmexport) describes the directive). **This repo should use `//go:wasmexport`** for exported game API functions—not the older **`//go:export`** style—unless you are deliberately matching legacy host shims.
 
-Exact `go build` flags and the `cmd/` entrypoint will be documented next to the WASM command once it exists ([`src/cmd/joulequest_wasm/`](src/cmd/joulequest_wasm/) per plan).
+### Reactor-style `wasm-unknown` modules
+
+For a **library-style (reactor) module** that stays loaded while the host calls exports repeatedly, use TinyGo’s **`wasm-unknown`** target (see the upstream example [`hello-wasm-unknown/main.go`](https://github.com/tinygo-org/tinygo/blob/v0.40.1/src/examples/hello-wasm-unknown/main.go) for layout and `tinygo build` flags; the checked-in example may still use **`//go:export`**, but **this repo** should use **`//go:wasmexport`** as above). The reference build line is:
+
+`tinygo build -size short -o hello-unknown.wasm -target wasm-unknown -gc=leaking -no-debug …`
+
+That pattern (`wasm32-unknown-unknown`, empty or minimal `main`) matches how **wasmtime** (and similar hosts) embed a long-lived module. Exact flags for JouleQuest will live next to the WASM `cmd/` once it exists ([`src/cmd/joulequest_wasm/`](src/cmd/joulequest_wasm/) per plan); keep **`-target=wasm-unknown`** (with hyphen) unless TinyGo’s docs for your version specify otherwise.
+
+### `gc` WASI as reference only
+
+Upstream **Go 1.24+** `GOOS=wasip1` + **`//go:wasmexport`** remains useful for **cross-checking** semantics and CI, but **shipping** the training artifact is planned via **TinyGo** as above.
 
 ## Python side (planned)
 
@@ -83,14 +93,25 @@ Exact `go build` flags and the `cmd/` entrypoint will be documented next to the 
 
 ## Tradeoffs and follow-ups
 
-- **Binary size**: the first milestone may use the **official Go** WASI toolchain; if the module is too large, evaluate **TinyGo** with the same compact engine (may require stricter Go subset).
-- **Randomness**: [`OperatePhase`](src/engine/operation.go) today uses **`math/rand`** globally; the compact engine and WASM build will use **explicit, seedable RNG state** so tests and RL runs are reproducible.
+- **Binary size / toolchain**: the training WASM module is planned to be built with **TinyGo** (≥ **0.34** so **`//go:wasmexport`** is available), **`wasm-unknown`** reactor builds, prioritizing a **small binary** and alignment with the compact engine’s constraints. Stay within **TinyGo-supported stdlib and language features** (see [.cursor/rules/joulequest-wasm-training.mdc](.cursor/rules/joulequest-wasm-training.mdc)).
+- **Randomness**: [`OperatePhase`](src/engine/operation.go) today uses **`math/rand`** globally; the compact engine uses **`math/rand/v2.PCG`** for reproducible operate-phase draws.
+
+### Follow-up: shared enums in `core` (reduce `compact/game` duplication)
+
+[`src/compact/game`](src/compact/game) currently defines its own **`GameStatus`**, **`PlayerStatus`**, and **`LossCondition`** types so it does not **`import`** [`engine`](src/engine) (which pulls **`eventlog`** and other interactive-stack dependencies through shared files such as [`enums.go`](src/engine/enums.go)). This is problematic as eventlog depends on `encoding/json`, which is not supported in TinyGo.
+
+**Planned refactor:** extract those **pure enum types** (and any similar API-stable constants) from **`engine`** into [`src/core`](src/core) — a package that already holds cross-cutting types like [`PriceVolatility`](src/core/core.go) and is safe for **`compact/game`** to depend on. Then:
+
+- **`engine`** imports `core` for those enums (or uses type aliases if needed during migration).
+- **`compact/game`** drops its duplicate definitions and uses **`core`** instead, keeping a **single source of truth** for numeric constants exposed to REST, WASM, and parity tests.
+
+This is follow-up work for the maintainer when convenient; it is not required for the first WASM prototype to run.
 
 ## Roadmap (remainder of project)
 
-Not implemented in the step that produced this document; tracked in the repo plan *WASM FFI training bridge*:
+Tracked in the repo plan *WASM FFI training bridge*:
 
-1. **Compact engine** — fixed max players, `AssetMix`-style holdings and takeover pool, mask-based legal actions, no event logger.  
+1. **Compact engine** — implemented under [`src/compact/params`](src/compact/params) (fixed `CompactParams`) and [`src/compact/game`](src/compact/game) (procedural `Game`, build masks 0–14, operate phase, seeded RNG). 
 2. **Go parity tests** — same seeds and action streams vs `ProceduralGameState`, comparing **OpenAPI-visible** fields and masks.  
-3. **`cmd/joulequest_wasm`** — WASI reactor + `//go:wasmexport` API.  
+3. **`src/compact/client`** — TinyGo **`wasm-unknown`** reactor build + **`//go:wasmexport`** API (TinyGo ≥ 0.34).  
 4. **Python wasmtime client** + optional **enum codegen** from Go.

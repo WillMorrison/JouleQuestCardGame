@@ -7,7 +7,7 @@ todos:
     status: completed
   - id: compact-engine
     content: Implement fixed-layout training engine package (MaxPlayers 10, mask-based actions, seeded RNG, no logging) alongside src/engine
-    status: pending
+    status: completed
   - id: parity-tests
     content: Add Go parity tests vs ProceduralGameState; compare only the OpenAPI/WASM observable surface (stateResponse-shaped fields + action masks), same seeds/actions; escalate ordering/RNG/ref quirks to human
     status: pending
