@@ -1,0 +1,4 @@
+# Model training outputs
+/log/
+*.pt
+*.h5

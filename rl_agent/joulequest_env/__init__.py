@@ -10,36 +10,54 @@ from apiclient import joule_quest_api_client
 from apiclient.joule_quest_api_client.models import PlayerAction, PlayerActionAssetType, PlayerActionType, Game, GameStatus, GameReason, PlayerStatus
 from game_client import GameClient
 
-# The observation space for a single player
+# The observation space for a single player's view of the game
+# Flattened to a vector of scalars to avoid large one-hot encodings
+OBSERVATION_LOW = np.array([
+    0,  # Game_Status
+    0,  # Game_Reason
+    0,  # Game_Round
+    0,  # Game_EmissionsCounter
+    0,  # Game_LastAssetMix_Renewables
+    0,  # Game_LastAssetMix_BatteriesArbitrage
+    0,  # Game_LastAssetMix_BatteriesCapacity
+    0,  # Game_LastAssetMix_FossilsWholesale
+    0,  # Game_LastAssetMix_FossilsCapacity
+    0,  # Game_LastGridStability
+    0,  # Game_LastPriceVolatility
+    0,  # Player_Status
+    -1024,  # Player_Money
+    0,  # Player_AssetMix_Renewables
+    0,  # Player_AssetMix_BatteriesArbitrage
+    0,  # Player_AssetMix_BatteriesCapacity
+    0,  # Player_AssetMix_FossilsWholesale
+    0,  # Player_AssetMix_FossilsCapacity
+], dtype=np.int32)
+
+OBSERVATION_HIGH = np.array([
+    2,  # Game_Status
+    7,  # Game_Reason
+    1023,  # Game_Round
+    1023,  # Game_EmissionsCounter
+    1023,  # Game_LastAssetMix_Renewables
+    1023,  # Game_LastAssetMix_BatteriesArbitrage
+    1023,  # Game_LastAssetMix_BatteriesCapacity
+    1023,  # Game_LastAssetMix_FossilsWholesale
+    1023,  # Game_LastAssetMix_FossilsCapacity
+    3,  # Game_LastGridStability
+    3,  # Game_LastPriceVolatility
+    1,  # Player_Status
+    65535 - 1024 - 1,  # Player_Money (approx)
+    1023,  # Player_AssetMix_Renewables
+    1023,  # Player_AssetMix_BatteriesArbitrage
+    1023,  # Player_AssetMix_BatteriesCapacity
+    1023,  # Player_AssetMix_FossilsWholesale
+    1023,  # Player_AssetMix_FossilsCapacity
+], dtype=np.int32)
+
 OBSERVATION_SPACE = spaces.Dict({
-            "Game": spaces.Dict({
-                "Status": spaces.Discrete(3, dtype=np.int8), # Corresponds to engine.GameStatus
-                "Reason": spaces.Discrete(8, dtype=np.int8), # Corresponds to engine.LossCondition
-                "Round": spaces.Discrete(1024),
-                "EmissionsCounter": spaces.Discrete(1024),
-                "LastAssetMix": spaces.Dict({
-                    "Renewables": spaces.Discrete(1024),
-                    "BatteriesArbitrage": spaces.Discrete(1024),
-                    "BatteriesCapacity": spaces.Discrete(1024),
-                    "FossilsWholesale": spaces.Discrete(1024),
-                    "FossilsCapacity": spaces.Discrete(1024),
-                }),
-                "LastGridStability": spaces.Discrete(4, dtype=np.int8), # Corresponds to core.GridStability
-                "LastPriceVolatility": spaces.Discrete(4, dtype=np.int8), # Corresponds to core.PriceVolatility
-            }),
-            "Player": spaces.Dict({
-                "Status": spaces.Discrete(2, dtype=np.int8), # Corresponds to engine.PlayerStatus
-                "Money": spaces.Discrete(65535, start=-1024),
-                "AssetMix": spaces.Dict({
-                    "Renewables": spaces.Discrete(1024),
-                    "BatteriesArbitrage": spaces.Discrete(1024),
-                    "BatteriesCapacity": spaces.Discrete(1024),
-                    "FossilsWholesale": spaces.Discrete(1024),
-                    "FossilsCapacity": spaces.Discrete(1024),
-                }),
-           }),
-           "action_mask": spaces.MultiBinary(15)
-        })
+    "observation": spaces.Box(low=OBSERVATION_LOW, high=OBSERVATION_HIGH, dtype=np.int32),
+    "action_mask": spaces.MultiBinary(15)
+})
 
 # (build, scrap, takeover, takeover+scrap)x(renewable, battery, fossil) + (pledge)x(battery, fossil) + (finished)
 ACTION_SPACE = spaces.Discrete(15)
@@ -115,11 +133,16 @@ def GameReasontoInt(reason: GameReason) -> np.int8:
         return np.int8(5)
     raise ValueError(f"Invalid Game Loss Reason {reason}")
 
+def _agent_name(i: int)-> str:
+    return f"player_{i}"
+
 def env(num_players: int, client: joule_quest_api_client.Client):
     env = JoulequestEnv(num_players, client)
     env = wrappers.AssertOutOfBoundsWrapper(env)
     env = wrappers.OrderEnforcingWrapper(env)
     return env
+
+agentType = str
 
 class JoulequestEnv(AECEnv):
     metadata = {
@@ -136,17 +159,18 @@ class JoulequestEnv(AECEnv):
         self._api_client = client
         self._game_client : GameClient|None = None
 
-        self.possible_agents = list(range(num_players))
+        self.possible_agents: list[agentType] = [_agent_name(i) for i in range(num_players)]
+        self._agent_index: dict[agentType, int] = {_agent_name(i): i for i in range(num_players)}
         self.observation_spaces = {agent: OBSERVATION_SPACE for agent in self.possible_agents}
         self.action_spaces = {agent: ACTION_SPACE for agent in self.possible_agents}
 
     @property
-    def _active_agents(self) -> list[int]:
+    def _active_agents(self) -> list[agentType]:
         if self._game_client is None:
             return []
-        return list(set(a.player_index for a in self._game_client.possible_actions))
+        return list(set(_agent_name(a.player_index) for a in self._game_client.possible_actions))
     
-    def _select_active_agent(self) -> int:
+    def _select_active_agent(self) -> agentType:
         return self.np_random.choice(self._active_agents)
 
     def reset(self, seed=None, options=None):
@@ -156,14 +180,14 @@ class JoulequestEnv(AECEnv):
 
         # Unlike gymnasium's Env, the environment is responsible for setting the random seed explicitly.
         self.np_random, self.np_random_seed = seeding.np_random(seed)
-        self.agents: list[int] = self.possible_agents[:]
-        self.rewards = {agent: 0 for agent in self.agents}
-        self._cumulative_rewards = {agent: 0 for agent in self.agents}
-        self.terminations = {agent: False for agent in self.agents}
-        self.truncations = {agent: False for agent in self.agents}
+        self.agents: list[agentType] = self.possible_agents[:]
+        self.rewards: dict[agentType, float] = {agent: 0 for agent in self.agents}
+        self._cumulative_rewards: dict[agentType, float] = {agent: 0 for agent in self.agents}
+        self.terminations: dict[agentType, bool] = {agent: False for agent in self.agents}
+        self.truncations: dict[agentType, bool] = {agent: False for agent in self.agents}
         self.infos = {agent: {} for agent in self.agents}
         self.observations = {agent: {} for agent in self.agents}
-        self.agent_selection = self._select_active_agent()
+        self.agent_selection: agentType = self._select_active_agent()
 
     def step(self, action:int|None):
         if self._game_client is None:
@@ -179,12 +203,18 @@ class JoulequestEnv(AECEnv):
         # seems weird, but makes the api_test pass
         self._cumulative_rewards[self.agent_selection] = 0
 
-        possible_actions = [a for a in self._game_client.possible_actions if a.player_index==self.agent_selection]
+        possible_actions = [a for a in self._game_client.possible_actions if a.player_index==self._agent_index[self.agent_selection]]
         if not possible_actions:
             # Chosen agent can't do anything, move along
             self.agent_selection = self._select_active_agent()
             return
-        chosen_action = IntToPlayerAction(action, possible_actions)
+        try:
+            chosen_action = IntToPlayerAction(action, possible_actions)
+        except KeyError:
+            # Illegal action chosen, penalize and move along
+            self.rewards[self.agent_selection] -= 10
+            self.agent_selection = self._select_active_agent()
+            return
 
         self._game_client.send_action(chosen_action)
 
@@ -197,31 +227,30 @@ class JoulequestEnv(AECEnv):
                 self.terminations[a] = True
         elif self._game_client.game.status == GameStatus.WIN:
             is_over = True
-            for a in self.agents:
-                self.rewards[a] += 100 # Reward for Winning!
-                self.rewards[a] += self._game_client.game.players[a].money # Reward for successful capitalism
+            for a_i, a in enumerate(self.agents):
+                self.rewards[a] += 1000 # Reward for Winning!
+                self.rewards[a] += self._game_client.game.players[a_i].money # Reward for successful capitalism
                 self.terminations[a] = True
 
         # Handle player loss for active agents
-        for a in self.agents:
-            if self._game_client.game.players[a].status == PlayerStatus.LOST:
+        for a_i, a in enumerate(self.agents):
+            if not self.terminations[a] and self._game_client.game.players[a_i].status == PlayerStatus.LOST:
                 self.rewards[a] -= 1000  # Large penalty for losing
                 self.terminations[a] = True
 
         # Incremental rewards if the active agent is still in the game
-        player = self._game_client.game.players[self.agent_selection]
+        player = self._game_client.game.players[self._agent_index[self.agent_selection]]
         if player.status != PlayerStatus.LOST:
-            self.rewards[self.agent_selection] += 0.001*player.money # Hint that more money is good
-            self.rewards[self.agent_selection] -= 0.001*self._game_client.game.emissions_counter # Hint that emissions counter going up is bad
+            self.rewards[self.agent_selection] += 0.1 # Survival reward
 
         if not is_over:
             self.agent_selection = self._select_active_agent()
 
         self._accumulate_rewards()
 
-    def _action_mask(self, agent, possible_actions: list[PlayerAction]) -> list[int]:
+    def _action_mask(self, agent_index:int, possible_actions: list[PlayerAction]) -> list[int]:
         # Get valid action ints for agent (e.g., [0, 4, 7])
-        valid_actions = [PlayerActionToInt(a) for a in possible_actions if a.player_index==agent]
+        valid_actions = [PlayerActionToInt(a) for a in possible_actions if a.player_index==agent_index]
         
         # Create a binary mask of 0s (forbidden) and 1s (allowed)
         mask = [1 if i in valid_actions else 0 for i in range(15)]
@@ -229,28 +258,41 @@ class JoulequestEnv(AECEnv):
         return mask
 
 
-    def observe(self, agent:int):
+    def observe(self, agent: agentType):
         if self._game_client is None:
             raise TypeError("Game client should be initialized")
+        agent_index = self._agent_index[agent]
         
-        mask = self._action_mask(agent, self._game_client.possible_actions)
+        mask = self._action_mask(agent_index, self._game_client.possible_actions)
+        
+        game = self._game_client.game
+        player = game.players[agent_index]
+        last_snapshot = game.last_round_snapshot
+        
+        observation = np.array([
+            GameStatusToInt(game.status),
+            GameReasontoInt(game.reason),
+            game.round_,
+            game.emissions_counter,
+            last_snapshot.asset_mix.renewables,
+            last_snapshot.asset_mix.batteries_arbitrage,
+            last_snapshot.asset_mix.batteries_capacity,
+            last_snapshot.asset_mix.fossils_wholesale,
+            last_snapshot.asset_mix.fossils_capacity,
+            last_snapshot.grid_stability,
+            last_snapshot.price_volatility,
+            PlayerStatusToInt(player.status),
+            player.money,
+            player.assets.renewables,
+            player.assets.batteries_arbitrage,
+            player.assets.batteries_capacity,
+            player.assets.fossils_wholesale,
+            player.assets.fossils_capacity,
+        ], dtype=np.float32)
         
         return {
-            "Game": {
-                "Status": GameStatusToInt(self._game_client.game.status),
-                "Reason": GameReasontoInt(self._game_client.game.reason),
-                "Round": self._game_client.game.round_,
-                "EmissionsCounter": self._game_client.game.emissions_counter,
-                "LastAssetMix": self._game_client.game.last_round_snapshot.asset_mix.to_dict(),
-                "LastGridStability": self._game_client.game.last_round_snapshot.grid_stability,
-                "LastPriceVolatility": self._game_client.game.last_round_snapshot.price_volatility,
-            },
-            "Player": {
-                "Status": PlayerStatusToInt(self._game_client.game.players[agent].status),
-                "Money": self._game_client.game.players[agent].money,
-                "AssetMix": self._game_client.game.players[agent].assets.to_dict(),
-            },
-            "action_mask":np.array(mask, dtype=np.int8),
+            "observation": observation,
+            "action_mask": np.array(mask, dtype=np.int8),
         }
 
     def render(self):
@@ -261,10 +303,10 @@ class JoulequestEnv(AECEnv):
         if self._game_client is not None:
             self._game_client.close()
 
-    def action_space(self, agent) -> spaces.Space:
+    def action_space(self, agent: agentType) -> spaces.Space:
         return ACTION_SPACE
     
-    def observation_space(self, agent) -> spaces.Space:
+    def observation_space(self, agent: agentType) -> spaces.Space:
         return OBSERVATION_SPACE
     
     @property
