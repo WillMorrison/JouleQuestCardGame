@@ -573,6 +573,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "attrs", marker = "sys_platform == 'linux'" },
+    { name = "h5py", marker = "sys_platform == 'linux'" },
     { name = "httpx", marker = "sys_platform == 'linux'" },
     { name = "pettingzoo", marker = "sys_platform == 'linux'" },
     { name = "python-dateutil", marker = "sys_platform == 'linux'" },
@@ -588,6 +589,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "attrs", specifier = ">=22.2.0" },
+    { name = "h5py", specifier = ">=3.16.0" },
     { name = "httpx", specifier = ">=0.23.0,<0.29.0" },
     { name = "pettingzoo", specifier = ">=1.25.0" },
     { name = "python-dateutil", specifier = "==2.8.0" },

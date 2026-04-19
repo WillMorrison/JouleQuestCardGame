@@ -18,7 +18,7 @@ uv run -m joulequest_env.env_test --executable ../src/rest_api
 To train a policy model
 
 ```sh
-uv run train.py --executable ../src/rest_api --tensorboard_dir log
+uv run train.py --executable ../src/rest_api
 
 uv run tensorboard --logdir 'log'
 ```

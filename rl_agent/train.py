@@ -1,5 +1,8 @@
 import argparse
+import dataclasses
+import datetime
 import os
+import pathlib
 from typing import Any, Callable
 
 import numpy as np
@@ -9,7 +12,7 @@ from tianshou.env import DummyVectorEnv, PettingZooEnv, BaseVectorEnv
 from tianshou.policy import MultiAgentPolicyManager, DQNPolicy, BasePolicy
 from tianshou.trainer import OffpolicyTrainer
 from tianshou.utils.net.common import Net
-from tianshou.utils import TensorboardLogger, LazyLogger
+from tianshou.utils import TensorboardLogger, LazyLogger, BaseLogger
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -28,7 +31,7 @@ class RandomMaskedPolicy(BasePolicy):
         ok_actions = np.array([1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1], dtype=np.int8)
         filtered = mask*ok_actions
         if not np.array_equal(filtered, np.zeros(filtered.shape)):
-                mask = filtered
+            mask = filtered
 
         # Generate random logits, then set masked actions to a very low number
         logits = torch.randn(mask.shape)
@@ -37,16 +40,30 @@ class RandomMaskedPolicy(BasePolicy):
     
     def learn(self, batch: Batch, **kwargs: Any) -> dict[str, Any]:
         return {}
-    
-def preheat_buffer(buffer: ReplayBuffer, env: BaseVectorEnv):
-    """Preheat by filling the buffer with random actions, respecting the action masks and avoiding stupid actions when possible."""
-    warmup_collector = Collector(RandomMaskedPolicy(), env, buffer)
-    warmup_collector.collect(n_episode=1000, random=True)
 
-def train(get_env: Callable[[], PettingZooEnv], writer: SummaryWriter|None = None):
+
+@dataclasses.dataclass(frozen=True)
+class WarmupBufferConfig:
+    path: str = ""
+    load: bool = False
+    save: bool = False
+    warmup_episodes: int = 0
+
+    def preheat(self, buffer: ReplayBuffer, env: BaseVectorEnv):
+        """Preheat by filling the buffer with random actions, respecting the action masks and avoiding stupid actions when possible."""
+        if self.warmup_episodes:
+            print(f"Pre-filling replay buffer with {self.warmup_episodes} episodes")
+            warmup_collector = Collector(RandomMaskedPolicy(), env, buffer)
+            warmup_collector.collect(n_episode=self.warmup_episodes)
+            if self.save and self.path:
+                print(f"Saving replay buffer with {len(buffer)} samples to {self.path}")
+                buffer.save_hdf5(self.path)
+
+
+def train(get_env: Callable[[], PettingZooEnv], logger: BaseLogger, warmup_config: WarmupBufferConfig, max_epoch: int) -> BasePolicy:
     env = get_env()
 
-    # 1. THE BRAIN (Neural Network)
+    # THE BRAIN (Neural Network)
     observation_shape = joulequest_env.OBSERVATION_SPACE["observation"].shape
     action_shape = joulequest_env.ACTION_SPACE.n
     net = Net(
@@ -57,7 +74,7 @@ def train(get_env: Callable[[], PettingZooEnv], writer: SummaryWriter|None = Non
     ).to("cuda" if torch.cuda.is_available() else "cpu")
     optim = torch.optim.Adam(net.parameters(), lr=1e-4)
 
-    # 2. THE POLICY (DQN)
+    # THE POLICY (DQN)
     # This policy will be shared by all agents (Parameter Sharing)
     shared_policy = DQNPolicy(
         model=net, 
@@ -67,7 +84,7 @@ def train(get_env: Callable[[], PettingZooEnv], writer: SummaryWriter|None = Non
     )
     policy = MultiAgentPolicyManager([shared_policy] * len(env.agents), env)
 
-    # 3. DATA COLLECTION
+    # DATA COLLECTION
     train_envs = DummyVectorEnv([get_env for _ in range(2)])
     test_envs = DummyVectorEnv([get_env for _ in range(2)])
     
@@ -77,13 +94,17 @@ def train(get_env: Callable[[], PettingZooEnv], writer: SummaryWriter|None = Non
     train_envs.seed(seed)
     test_envs.seed(seed)
 
-    train_buffer = PrioritizedVectorReplayBuffer(160000, len(train_envs), alpha=0.6, beta=0.4, weight_norm=True)
+    train_buffer = PrioritizedVectorReplayBuffer(160000, len(train_envs), alpha=0.6, beta=0.4, weight_norm=False)
     train_collector = Collector(policy, train_envs, train_buffer, exploration_noise=True)
     test_collector = Collector(policy, test_envs, exploration_noise=True)
 
-    preheat_buffer(train_buffer, train_envs)
+    if warmup_config.load and warmup_config.path:
+        print("Loading replay buffer from", warmup_config.path)
+        train_buffer=train_buffer.load_hdf5(warmup_config.path)
+        print(f"Loaded replay buffer with {len(train_buffer)} samples")
+    else:
+        warmup_config.preheat(train_buffer, train_envs)
 
-    max_epoch = 250
     def train_fn(epoch, env_step):
         # Epsilon decay from 0.4 to 0.1 over the course of training
         # This controls the exploration rate of the policy. Higher epsilon means more random actions.
@@ -95,14 +116,7 @@ def train(get_env: Callable[[], PettingZooEnv], writer: SummaryWriter|None = Non
         beta = 0.4 + 0.6 * (epoch / max_epoch)
         train_buffer.set_beta(beta)
 
-    # 4. Logging
-
-    if writer is not None:
-        logger = TensorboardLogger(writer)
-    else:
-        logger = LazyLogger()
-
-    # 5. TRAINING LOOP
+    # TRAINING LOOP
     OffpolicyTrainer(
         policy=policy,
         train_collector=train_collector,
@@ -123,24 +137,54 @@ def train(get_env: Callable[[], PettingZooEnv], writer: SummaryWriter|None = Non
 
 
 def main():
+    run_id = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d_%H-%M-%S")
+
     parser = argparse.ArgumentParser(
-                    prog='JouleQuest server runner',
-                    description='Runs the joulequest server in a child process and communicates with it over a unix socket')
+                    prog='JouleQuest policy trainer',
+                    description='Train a MARL model to play JouleQuest')
     parser.add_argument('--executable', required=True, help="Path to the rest_api executable")
+
+    # Training
     parser.add_argument('--num_players', default=4, type=int, help='Number of players per game')
-    parser.add_argument('--tensorboard_dir', default="", type=str, help='Path to log statistics to, which can be visualized with tensorboard')
-    parser.add_argument('--save', default='agent.pt', type=str, help='Path to save the trained model to')
+    parser.add_argument('--epochs', default=1250, type=int, help='Number of training epochs to run')
+
+    # Warmup
+    parser.add_argument('--replay_buffer', default="", type=pathlib.Path, help="Path to an HDF5 file to load the replay buffer from, or with --warmup_episodes, the path to save the buffer to for later replaying")
+    parser.add_argument('--warmup_episodes', default=0, type=int, help="Number of episodes to pre-fill the replay buffer with before starting training")
+
+    # Logging
+    parser.add_argument('--tensorboard_dir', default=f"log/{run_id}/", type=pathlib.Path, help='Path to log statistics to, which can be visualized with tensorboard')
+
+    # Model saving
+    parser.add_argument('--save', default=f"agent_{run_id}.pt", type=pathlib.Path, help='Path to save the trained model to')
+
     args = parser.parse_args()
 
-    log_writer = None
-    if args.tensorboard_dir:
-        os.makedirs(args.tensorboard_dir, exist_ok=True)
-        log_writer = SummaryWriter(args.tensorboard_dir)
+    # Warmup buffer load/preheat/save
+    if args.replay_buffer.suffix == '.h5' and args.warmup_episodes > 0:
+        warmup_config = WarmupBufferConfig(path=str(args.replay_buffer), save=True, warmup_episodes=args.warmup_episodes)
+    elif args.replay_buffer.suffix == '.h5' and args.replay_buffer.exists():
+        warmup_config = WarmupBufferConfig(path=str(args.replay_buffer), load=True)
+    elif args.warmup_episodes > 0:
+        warmup_config = WarmupBufferConfig(warmup_episodes=args.warmup_episodes)
+    else:
+        warmup_config = WarmupBufferConfig()
 
+    # Logger setup
+    if not args.tensorboard_dir.exists() or args.tensorboard_dir.is_dir():
+        print(f"Logging to directory {args.tensorboard_dir}")
+        args.tensorboard_dir.mkdir(parents=True, exist_ok=True)
+        logger = TensorboardLogger(SummaryWriter(str(args.tensorboard_dir)))
+    else:
+        logger = LazyLogger()
+
+    # Train the policy
     with ServerClient(args.executable, socket_path="/tmp/joulequest_api_train.sock", suppress_output=True) as cl:
         shared_policy = train(
             get_env=lambda: PettingZooEnv(joulequest_env.env(num_players=args.num_players, client=cl)),
-            writer=log_writer,
+            logger=logger, 
+            warmup_config=warmup_config,
+            max_epoch=args.epochs,
         )
     
     shared_policy.eval()
