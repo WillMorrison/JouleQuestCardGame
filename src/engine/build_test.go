@@ -44,7 +44,7 @@ func Test_GameState_possibleActions_NoActionsIfNotBuilding(t *testing.T) {
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: false,
 			},
 		},
@@ -61,7 +61,7 @@ func Test_GameState_possibleActions_NoActionsIfLost(t *testing.T) {
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusLost,
+				Status:     core.PlayerStatusLost,
 				isBuilding: true,
 			},
 		},
@@ -78,7 +78,7 @@ func Test_GameState_possibleActions_CanFinishIfTakeoverPoolEmpty(t *testing.T) {
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				Money:      0,
 				isBuilding: true,
 			},
@@ -101,7 +101,7 @@ func Test_GameState_possibleActions_CannotFinishIfTakeoverPoolHasAssetsWithForce
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      0,
 			},
@@ -119,7 +119,7 @@ func Test_GameState_possibleActions_CanFinishIfTakeoverPoolHasAssetsWithVirtualO
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      0,
 			},
@@ -142,7 +142,7 @@ func Test_GameState_possibleActions_CanPledgeAssetsForFree(t *testing.T) {
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				Money:      0,
 				Assets:     makeAssets(assets.AssetMix{BatteriesArbitrage: 1}),
 				isBuilding: true,
@@ -167,7 +167,7 @@ func Test_GameState_possibleActions_CannotPledgeAssetsAgainstRules(t *testing.T)
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				Money:      0,
 				Assets:     makeAssets(assets.AssetMix{BatteriesArbitrage: 1}),
 				isBuilding: true,
@@ -186,7 +186,7 @@ func Test_GameState_possibleActions_CannotPledgeRenewables(t *testing.T) {
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				Money:      0,
 				Assets:     makeAssets(assets.AssetMix{Renewables: 1}),
 				isBuilding: true,
@@ -205,7 +205,7 @@ func Test_GameState_possibleActions_CannotPledgeAlreadyPledgedAssets(t *testing.
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				Money:      0,
 				Assets:     makeAssets(assets.AssetMix{BatteriesCapacity: 1, FossilsCapacity: 1}),
 				isBuilding: true,
@@ -224,7 +224,7 @@ func Test_GameState_possibleActions_CanBuildWithSufficientMoney(t *testing.T) {
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      100,
 				Assets:     nil,
@@ -251,7 +251,7 @@ func Test_GameState_possibleActions_CanScrapWithSufficientMoney(t *testing.T) {
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      100,
 				Assets:     makeAssets(assets.AssetMix{Renewables: 1, FossilsWholesale: 1, BatteriesCapacity: 1}),
@@ -278,7 +278,7 @@ func Test_GameState_possibleActions_CanTakeoverWithSufficientMoney(t *testing.T)
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      100,
 				Assets:     nil,
@@ -309,7 +309,7 @@ func Test_GameState_possibleActions_InsufficientMoney(t *testing.T) {
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      10,
 				Assets:     makeAssets(assets.AssetMix{Renewables: 1, FossilsWholesale: 1, FossilsCapacity: 1, BatteriesArbitrage: 1, BatteriesCapacity: 1}),
@@ -333,25 +333,25 @@ func Test_GameState_possibleActions_MultiplePlayers(t *testing.T) {
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      0, // Can pledge to capacity
 				Assets:     makeAssets(assets.AssetMix{Renewables: 1, FossilsWholesale: 1, FossilsCapacity: 1, BatteriesArbitrage: 1, BatteriesCapacity: 1}),
 			},
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      100, // Can buy
 				Assets:     nil,
 			},
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: false, // Finished, no actions
 				Money:      100,
 				Assets:     makeAssets(assets.AssetMix{Renewables: 1, FossilsWholesale: 1}),
 			},
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      40, // Can scrap
 				Assets:     makeAssets(assets.AssetMix{Renewables: 1}),
@@ -410,7 +410,7 @@ func Test_GameState_applyPlayerAction_Impossible(t *testing.T) {
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      10,
 				Assets:     nil,
@@ -434,7 +434,7 @@ func Test_GameState_applyPlayerAction_Finished(t *testing.T) {
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      10,
 				Assets:     nil,
@@ -462,7 +462,7 @@ func Test_GameState_applyPlayerAction_Build(t *testing.T) {
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      60,
 				Assets:     nil,
@@ -499,7 +499,7 @@ func Test_GameState_applyPlayerAction_Scrap(t *testing.T) {
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      60,
 				Assets:     makeAssets(assets.AssetMix{BatteriesCapacity: 1, FossilsWholesale: 1}),
@@ -536,7 +536,7 @@ func Test_GameState_applyPlayerAction_Takeover(t *testing.T) {
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      60,
 				Assets:     nil,
@@ -578,7 +578,7 @@ func Test_GameState_applyPlayerAction_TakeoverScrap(t *testing.T) {
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      60,
 				Assets:     nil,
@@ -618,7 +618,7 @@ func Test_GameState_applyPlayerAction_Pledge(t *testing.T) {
 	gameState := GameState{
 		Players: []PlayerState{
 			{
-				Status:     PlayerStatusActive,
+				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      60,
 				Assets:     makeAssets(assets.AssetMix{BatteriesCapacity: 1, BatteriesArbitrage: 2}),

@@ -2,6 +2,8 @@
 
 package engine
 
+import "github.com/WillMorrison/JouleQuestCardGame/core"
+
 /*
 State machine state diagram.
 
@@ -28,7 +30,7 @@ type StateRunner func(gs *GameState) StateRunner
 
 // Run executes the state machine. It is a no-op to Run a game which has finished already
 func (gs *GameState) Run() {
-	if gs.Status != GameStatusOngoing {
+	if gs.Status != core.GameStatusOngoing {
 		return
 	}
 	current := GameStart

@@ -14,10 +14,10 @@ import (
 )
 
 type PlayerState struct {
-	Status PlayerStatus   // Whether the player has lost
-	Reason LossCondition  // Reason for player loss, if applicable
-	Money  int            // Player's current money
-	Assets []assets.Asset // Player's owned assets
+	Status core.PlayerStatus  // Whether the player has lost
+	Reason core.LossCondition // Reason for player loss, if applicable
+	Money  int                // Player's current money
+	Assets []assets.Asset     // Player's owned assets
 
 	isBuilding bool // Internal tracker of whether the player has finished the build round
 }
@@ -43,7 +43,7 @@ func (ps PlayerState) MarshalJSON() ([]byte, error) {
 		Money:  ps.Money,
 		Assets: ps.getAssetMix(),
 	}
-	if ps.Status != PlayerStatusActive {
+	if ps.Status != core.PlayerStatusActive {
 		psj.Reason = ps.Reason.String()
 	}
 	return json.Marshal(psj)
@@ -67,8 +67,8 @@ func (ps *PlayerState) resetAllAssets() {
 }
 
 // SetLossWithReason sets status and reason for loss. Caller is responsible for logging, handling asset takeover, etc.
-func (ps *PlayerState) SetLossWithReason(reason LossCondition) {
-	ps.Status = PlayerStatusLost
+func (ps *PlayerState) SetLossWithReason(reason core.LossCondition) {
+	ps.Status = core.PlayerStatusLost
 	ps.Reason = reason
 }
 
@@ -80,8 +80,8 @@ type Snapshot struct {
 }
 
 type GameState struct {
-	Status          GameStatus
-	Reason          LossCondition `json:",omitzero"` // Reason for global loss, if applicable
+	Status          core.GameStatus
+	Reason          core.LossCondition `json:",omitzero"` // Reason for global loss, if applicable
 	Round           int
 	CarbonEmissions int // Total carbon emissions in the world
 	Players         []PlayerState
@@ -92,7 +92,7 @@ type GameState struct {
 	Params          params.Params
 	Logger          eventlog.Logger `json:"-"`
 	GetPlayerAction GetPlayerAction // callback when the game needs to pick the next player action
-	GameOverFunc func() // Callback function which is called when the game ends.
+	GameOverFunc    func()          // Callback function which is called when the game ends.
 }
 
 // allAssets iterates over assets in player portfolios and in the takeover pool
@@ -125,7 +125,7 @@ func (gs GameState) getAssetMix() assets.AssetMix {
 func (gs *GameState) activePlayers() iter.Seq2[int, *PlayerState] {
 	return func(yield func(int, *PlayerState) bool) {
 		for pi := range gs.Players {
-			if gs.Players[pi].Status == PlayerStatusActive {
+			if gs.Players[pi].Status == core.PlayerStatusActive {
 				if !yield(pi, &gs.Players[pi]) {
 					return
 				}
@@ -135,8 +135,8 @@ func (gs *GameState) activePlayers() iter.Seq2[int, *PlayerState] {
 }
 
 // SetGlobalLossWithReason sets global game status and reason for loss. Caller is responsible for logging, state transitions, etc.
-func (gs *GameState) SetGlobalLossWithReason(reason LossCondition) {
-	gs.Status = GameStatusLoss
+func (gs *GameState) SetGlobalLossWithReason(reason core.LossCondition) {
+	gs.Status = core.GameStatusLoss
 	gs.Reason = reason
 }
 
@@ -154,19 +154,19 @@ func NewGame(numPlayers int, gameParams params.Params, logger eventlog.Logger, g
 	}
 
 	var game = GameState{
-		Status:          GameStatusOngoing,
+		Status:          core.GameStatusOngoing,
 		Round:           0,
 		CarbonEmissions: 0,
 		Params:          gameParams,
 		Logger:          logger,
 		GetPlayerAction: getAction,
-		GameOverFunc: doneCallback,
+		GameOverFunc:    doneCallback,
 	}
 
 	for range numPlayers {
 		p := PlayerState{
 			Money:  gameParams.InitialCash,
-			Status: PlayerStatusActive,
+			Status: core.PlayerStatusActive,
 		}
 		for range initialAssetsPerPlayer {
 			p.Assets = append(p.Assets, assets.New(assets.TypeFossil))

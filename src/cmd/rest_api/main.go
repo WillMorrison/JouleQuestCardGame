@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
+	"github.com/WillMorrison/JouleQuestCardGame/core"
 	"github.com/WillMorrison/JouleQuestCardGame/engine"
 	"github.com/WillMorrison/JouleQuestCardGame/eventlog"
 	"github.com/WillMorrison/JouleQuestCardGame/params"
@@ -120,7 +121,7 @@ func (g *game) writeStateResponse(resp http.ResponseWriter) {
 // handleAction handles requests with the selected player action and returns the observable game state
 func (g *game) handleAction(resp http.ResponseWriter, req *http.Request) {
 	// Write the PlayerAction encoded in the request to the state machine
-	if g.game.Status == engine.GameStatusOngoing {
+	if g.game.Status == core.GameStatusOngoing {
 		var pa engine.PlayerAction
 		d := json.NewDecoder(req.Body)
 		err := d.Decode(&pa)
@@ -143,7 +144,7 @@ func (g *game) writeLogToRequest(resp http.ResponseWriter) {
 
 // A server manages multiple games
 type server struct {
-	mu sync.RWMutex
+	mu    sync.RWMutex
 	games map[string]*game // Currently running games
 	rng   rand.Source      // RNG used to create game IDs
 }
@@ -190,7 +191,7 @@ func (s *server) actionHandler() http.HandlerFunc {
 			writeError(resp, http.StatusInternalServerError, fmt.Errorf(`cannot look up "id" in pattern %s`, req.Pattern))
 			return
 		}
-		
+
 		s.mu.RLock()
 		defer s.mu.RUnlock()
 		game, ok := s.games[sid]

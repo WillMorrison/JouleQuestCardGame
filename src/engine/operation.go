@@ -68,7 +68,7 @@ func (gs GameState) winConditionMet() bool {
 		// Check how many active players have fossil assets
 		var numFossilHolders int
 		for _, p := range gs.Players {
-			if p.Status == PlayerStatusActive && p.HasFossilAssets() {
+			if p.Status == core.PlayerStatusActive && p.HasFossilAssets() {
 				numFossilHolders++
 			}
 		}
@@ -83,7 +83,7 @@ func OperatePhase(gs *GameState) StateRunner {
 	logger.Event().With(GameLogEventStateMachineTransition).Log()
 
 	// Draw random event
-	risk := EventRisk(rand.Intn(3))
+	risk := core.EventRisk(rand.Intn(3))
 	logger.Event().With(GameLogEventEventDrawn, risk).Log()
 
 	// Calculate asset mix, price volatility, grid stability, and new emissions
@@ -95,18 +95,18 @@ func OperatePhase(gs *GameState) StateRunner {
 
 	// Check global loss conditions
 	if !gs.generationConstraintMet(gridOutcome.AssetMix) {
-		gs.SetGlobalLossWithReason(LossConditionInsufficientGeneration)
+		gs.SetGlobalLossWithReason(core.LossConditionInsufficientGeneration)
 		logger.Event().With(GameLogEventEveryoneLoses, gs.Reason).WithKey("generation_assets", gridOutcome.AssetMix.GenerationAssets()).Log()
 		return GameEnd
 	}
 	if int(gridOutcome.GridStability) < int(risk) {
-		gs.SetGlobalLossWithReason(LossConditionGridUnstable)
+		gs.SetGlobalLossWithReason(core.LossConditionGridUnstable)
 		logger.Event().With(GameLogEventEveryoneLoses, gs.Reason, gridOutcome.GridStability, risk).Log()
 		return GameEnd
 	}
 	gs.CarbonEmissions += gridOutcome.AssetMix.Emissions()
 	if gs.CarbonEmissions > gs.Params.EmissionsCap {
-		gs.SetGlobalLossWithReason(LossConditionCarbonEmissionsExceeded)
+		gs.SetGlobalLossWithReason(core.LossConditionCarbonEmissionsExceeded)
 		logger.Event().With(GameLogEventEveryoneLoses, gs.Reason).WithKey("total_emissions", gs.CarbonEmissions).WithKey("new_emissions", gridOutcome.AssetMix.Emissions()).Log()
 		return GameEnd
 	}
@@ -125,7 +125,7 @@ func OperatePhase(gs *GameState) StateRunner {
 
 		// Check player loss conditions
 		if p.Money < 0 {
-			p.SetLossWithReason(LossConditionPlayerBankrupt)
+			p.SetLossWithReason(core.LossConditionPlayerBankrupt)
 			gs.movePlayerAssetsToTakeoverPool(pi)
 			pLogger.Event().With(GameLogEventPlayerLoses, p.Reason).WithKey("player_money", p.Money).Log()
 			numActivePlayers--
@@ -136,8 +136,8 @@ func OperatePhase(gs *GameState) StateRunner {
 
 	// If all players are out (e.g. due to bankruptcy), the game is a loss
 	if numActivePlayers == 0 {
-		gs.SetGlobalLossWithReason(LossConditionNoActivePlayers)
-		logger.Event().With(GameLogEventEveryoneLoses, LossConditionNoActivePlayers).Log()
+		gs.SetGlobalLossWithReason(core.LossConditionNoActivePlayers)
+		logger.Event().With(GameLogEventEveryoneLoses, core.LossConditionNoActivePlayers).Log()
 		return GameEnd
 	}
 
@@ -150,14 +150,14 @@ func OperatePhase(gs *GameState) StateRunner {
 		// The last player with fossil assets left loses
 		lastFossilPlayerIndex := slices.IndexFunc(gs.Players, PlayerState.HasFossilAssets)
 		if lastFossilPlayerIndex != -1 {
-			gs.Players[lastFossilPlayerIndex].SetLossWithReason(LossConditionLastPlayerWithFossilAssets)
-			logger.Event().WithKey("player_index", lastFossilPlayerIndex).With(GameLogEventPlayerLoses, LossConditionLastPlayerWithFossilAssets).Log()
+			gs.Players[lastFossilPlayerIndex].SetLossWithReason(core.LossConditionLastPlayerWithFossilAssets)
+			logger.Event().WithKey("player_index", lastFossilPlayerIndex).With(GameLogEventPlayerLoses, core.LossConditionLastPlayerWithFossilAssets).Log()
 
 			// Check if we just eliminated the last player. If so, the game is a loss.
 			numActivePlayers--
 			if numActivePlayers == 0 {
-				gs.SetGlobalLossWithReason(LossConditionNoActivePlayers)
-				logger.Event().With(GameLogEventEveryoneLoses, LossConditionNoActivePlayers).Log()
+				gs.SetGlobalLossWithReason(core.LossConditionNoActivePlayers)
+				logger.Event().With(GameLogEventEveryoneLoses, core.LossConditionNoActivePlayers).Log()
 				return GameEnd
 			}
 		}
@@ -165,7 +165,7 @@ func OperatePhase(gs *GameState) StateRunner {
 	}
 
 	// There are active players left, they win!
-	gs.Status = GameStatusWin
+	gs.Status = core.GameStatusWin
 	logger.Event().With(GameLogEventGlobalWin).Log()
 	return GameEnd
 }

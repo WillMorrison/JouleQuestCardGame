@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
+	"github.com/WillMorrison/JouleQuestCardGame/core"
 	"github.com/WillMorrison/JouleQuestCardGame/eventlog"
 	"github.com/WillMorrison/JouleQuestCardGame/params"
 )
@@ -74,7 +75,7 @@ func (pgs *ProceduralGameState) runUntilBuildPhase() {
 		// do nothing, we're already in the build phase
 	case StateMachineStateOperatePhase:
 		OperatePhase(&pgs.gs)
-		if pgs.gs.Status == GameStatusOngoing {
+		if pgs.gs.Status == core.GameStatusOngoing {
 			pgs.startBuildPhase()
 		} else {
 			pgs.s = StateMachineStateGameEnd
@@ -111,7 +112,7 @@ func (pgs *ProceduralGameState) ApplyPlayerAction(chosenAction PlayerAction) {
 			// game cannot continue and there's a loss by technicality.
 			if pgs.gs.Params.TakeoverRule == params.TakeoverRuleForcedTakeover {
 				// game loss, assets in takeover pool that nobody can afford to take over
-				pgs.gs.SetGlobalLossWithReason(LossConditionUnownedTakeoverAssets)
+				pgs.gs.SetGlobalLossWithReason(core.LossConditionUnownedTakeoverAssets)
 				takeoverMix := assets.AssetMixFrom(slices.Values(pgs.gs.TakeoverPool))
 				var money []int
 				for _, p := range pgs.gs.Players {
@@ -119,7 +120,7 @@ func (pgs *ProceduralGameState) ApplyPlayerAction(chosenAction PlayerAction) {
 				}
 				pgs.logEvent().With(GameLogEventEveryoneLoses, pgs.gs.Reason).WithKey("takeover_pool", takeoverMix).WithKey("player_funds", money).Log()
 			} else {
-				pgs.gs.SetGlobalLossWithReason(LossConditionNoActivePlayers) // Should never happen, but if it does, force a game loss
+				pgs.gs.SetGlobalLossWithReason(core.LossConditionNoActivePlayers) // Should never happen, but if it does, force a game loss
 				pgs.logEvent().With(GameLogEventEveryoneLoses, pgs.gs.Reason).Log()
 			}
 			pgs.s = StateMachineStateGameEnd

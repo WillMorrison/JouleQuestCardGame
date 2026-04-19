@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/WillMorrison/JouleQuestCardGame/core"
 	"github.com/WillMorrison/JouleQuestCardGame/eventlog"
 	"github.com/WillMorrison/JouleQuestCardGame/params"
 )
@@ -30,7 +31,7 @@ func Test_Run_E2E_NoopPlayers(t *testing.T) {
 	game.Run()
 
 	// Assert
-	if game.Status != GameStatusLoss || game.Reason != LossConditionCarbonEmissionsExceeded {
-		t.Errorf("Game status was %s: %q, want %s: %q", game.Status.String(), game.Reason.String(), GameStatusLoss.String(), LossConditionCarbonEmissionsExceeded.String())
+	if game.Status != core.GameStatusLoss || game.Reason != core.LossConditionCarbonEmissionsExceeded {
+		t.Errorf("Game status was %s: %q, want %s: %q", game.Status.String(), game.Reason.String(), core.GameStatusLoss.String(), core.LossConditionCarbonEmissionsExceeded.String())
 	}
 }

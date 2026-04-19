@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
+	"github.com/WillMorrison/JouleQuestCardGame/core"
 	"github.com/WillMorrison/JouleQuestCardGame/params"
 )
 
@@ -79,7 +80,7 @@ func BuildPhase(gs *GameState) StateRunner {
 		if len(actions) == 0 {
 			if gs.Params.TakeoverRule == params.TakeoverRuleForcedTakeover {
 				// game loss, assets in takeover pool that nobody can afford to take over
-				gs.SetGlobalLossWithReason(LossConditionUnownedTakeoverAssets)
+				gs.SetGlobalLossWithReason(core.LossConditionUnownedTakeoverAssets)
 				takeoverMix := assets.AssetMixFrom(slices.Values(gs.TakeoverPool))
 				var money []int
 				for _, p := range gs.Players {
@@ -87,7 +88,7 @@ func BuildPhase(gs *GameState) StateRunner {
 				}
 				logger.Event().With(GameLogEventEveryoneLoses, gs.Reason).WithKey("takeover_pool", takeoverMix).WithKey("player_funds", money).Log()
 			} else {
-				gs.SetGlobalLossWithReason(LossConditionNoActivePlayers) // Should never happen, but if it does, force a game loss
+				gs.SetGlobalLossWithReason(core.LossConditionNoActivePlayers) // Should never happen, but if it does, force a game loss
 				logger.Event().With(GameLogEventEveryoneLoses, gs.Reason).Log()
 			}
 			return GameEnd
