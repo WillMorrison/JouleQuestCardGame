@@ -234,14 +234,14 @@ class JoulequestEnv(AECEnv):
 
         # Handle player loss for active agents
         for a_i, a in enumerate(self.agents):
-            if self._game_client.game.players[a_i].status == PlayerStatus.LOST:
+            if not self.terminations[a] and self._game_client.game.players[a_i].status == PlayerStatus.LOST:
                 self.rewards[a] -= 1000  # Large penalty for losing
                 self.terminations[a] = True
 
         # Incremental rewards if the active agent is still in the game
         player = self._game_client.game.players[self._agent_index[self.agent_selection]]
         if player.status != PlayerStatus.LOST:
-            self.rewards[self.agent_selection] += 0.01 # Survival reward
+            self.rewards[self.agent_selection] += 0.1 # Survival reward
 
         if not is_over:
             self.agent_selection = self._select_active_agent()
