@@ -134,11 +134,8 @@ func (g *Game) firstPlayerIndexWithFossil() int {
 	return -1
 }
 
-// SetRNGSeed seeds the operate-phase PCG (math/rand/v2). A zero seed is replaced with a non-zero default.
+// SetRNGSeed seeds the operate-phase PCG RNG.
 func (g *Game) SetRNGSeed(seed uint64) {
-	if seed == 0 {
-		seed = 0x9e3779b97f4a7c15
-	}
 	// Two 64-bit words; second derived so a single-seed API still spreads state.
 	g.pcg.Seed(seed, bits.ReverseBytes64(seed)^0xdeadbeefcafebabe)
 }

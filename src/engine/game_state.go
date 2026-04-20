@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"math/bits"
+	randv2 "math/rand/v2"
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
 	"github.com/WillMorrison/JouleQuestCardGame/core"
@@ -93,6 +95,9 @@ type GameState struct {
 	Logger          eventlog.Logger `json:"-"`
 	GetPlayerAction GetPlayerAction // callback when the game needs to pick the next player action
 	GameOverFunc    func()          // Callback function which is called when the game ends.
+
+	// RNG for operate-phase randomness
+	pcg randv2.PCG
 }
 
 // allAssets iterates over assets in player portfolios and in the takeover pool
@@ -144,6 +149,12 @@ func (gs *GameState) SetGlobalLossWithReason(reason core.LossCondition) {
 func (gs *GameState) movePlayerAssetsToTakeoverPool(pi int) {
 	gs.TakeoverPool = append(gs.TakeoverPool, gs.Players[pi].Assets...)
 	gs.Players[pi].Assets = nil
+}
+
+// SetRNGSeed seeds the operate-phase PCG RNG.
+func (gs *GameState) SetRNGSeed(seed uint64) {
+	// Two 64-bit words; second derived so a single-seed API still spreads state.
+	gs.pcg.Seed(seed, bits.ReverseBytes64(seed)^0xdeadbeefcafebabe)
 }
 
 // NewGame returns a new GameState ready to play

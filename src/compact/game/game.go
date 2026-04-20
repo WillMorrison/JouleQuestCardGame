@@ -22,7 +22,6 @@ type Game struct {
 	LastSnapshot    Snapshot
 	Params          cparams.CompactParams
 	// pcg is operate-phase randomness (same role as math/rand in engine.OperatePhase).
-	// Named field (not embedded) so Seed/Uint64 are not promoted onto Game’s API.
 	pcg randv2.PCG
 }
 

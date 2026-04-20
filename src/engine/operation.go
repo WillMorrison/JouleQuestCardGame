@@ -3,7 +3,6 @@
 package engine
 
 import (
-	"math/rand"
 	"slices"
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
@@ -83,7 +82,7 @@ func OperatePhase(gs *GameState) StateRunner {
 	logger.Event().With(GameLogEventStateMachineTransition).Log()
 
 	// Draw random event
-	risk := core.EventRisk(rand.Intn(3))
+	risk := core.EventRisk(gs.pcg.Uint64() % 3)
 	logger.Event().With(GameLogEventEventDrawn, risk).Log()
 
 	// Calculate asset mix, price volatility, grid stability, and new emissions
