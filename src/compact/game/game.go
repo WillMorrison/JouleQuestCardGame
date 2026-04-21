@@ -6,14 +6,25 @@ import (
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
 	cparams "github.com/WillMorrison/JouleQuestCardGame/compact/params"
+	"github.com/WillMorrison/JouleQuestCardGame/core"
 	legacy "github.com/WillMorrison/JouleQuestCardGame/params"
+)
+
+// phase is internal to the compact procedural state machine (not exported to REST/WASM).
+type phase int32
+
+const (
+	phaseGameStart phase = iota
+	phaseBuild
+	phaseOperate
+	phaseGameEnd
 )
 
 // Game is the compact procedural controller (build / operate loop) with fixed-size state.
 type Game struct {
 	Phase           phase
-	Status          GameStatus
-	Reason          LossCondition
+	Status          core.GameStatus
+	Reason          core.LossCondition
 	round           int32
 	CarbonEmissions int32
 	NumPlayers      int
@@ -37,11 +48,11 @@ func NewGame(numPlayers int, p cparams.CompactParams) (*Game, error) {
 	var g Game
 	g.Params = p
 	g.NumPlayers = numPlayers
-	g.Status = GameStatusOngoing
+	g.Status = core.GameStatusOngoing
 	g.Phase = phaseGameStart
 	for i := 0; i < numPlayers; i++ {
 		g.Players[i].Money = p.InitialCash
-		g.Players[i].Status = PlayerStatusActive
+		g.Players[i].Status = core.PlayerStatusActive
 		g.Players[i].IsBuilding = true
 		g.Players[i].Mix.FossilsWholesale = n
 	}
@@ -58,7 +69,7 @@ func (g *Game) refreshLastSnapshot() {
 func (g *Game) startBuildPhase() {
 	g.Phase = phaseBuild
 	for i := 0; i < g.NumPlayers; i++ {
-		if g.Players[i].Status == PlayerStatusActive {
+		if g.Players[i].Status == core.PlayerStatusActive {
 			g.Players[i].IsBuilding = true
 			g.Players[i].resetModesForBuild()
 		}
@@ -68,7 +79,7 @@ func (g *Game) startBuildPhase() {
 
 func (g *Game) haveBuildingPlayers() bool {
 	for i := 0; i < g.NumPlayers; i++ {
-		if g.Players[i].Status == PlayerStatusActive && g.Players[i].IsBuilding {
+		if g.Players[i].Status == core.PlayerStatusActive && g.Players[i].IsBuilding {
 			return true
 		}
 	}
@@ -92,7 +103,7 @@ func (g *Game) runUntilBuildPhase() {
 		// stay in build until an action advances state
 	case phaseOperate:
 		g.runOperatePhase()
-		if g.Status == GameStatusOngoing {
+		if g.Status == core.GameStatusOngoing {
 			g.startBuildPhase()
 		} else {
 			g.Phase = phaseGameEnd
@@ -124,11 +135,11 @@ func (g *Game) ApplyPlayerAction(playerIndex int, actionCode int32) error {
 			}
 		} else {
 			if g.Params.TakeoverRule == legacy.TakeoverRuleForcedTakeover {
-				g.Status = GameStatusLoss
-				g.Reason = LossConditionUnownedTakeoverAssets
+				g.Status = core.GameStatusLoss
+				g.Reason = core.LossConditionUnownedTakeoverAssets
 			} else {
-				g.Status = GameStatusLoss
-				g.Reason = LossConditionNoActivePlayers
+				g.Status = core.GameStatusLoss
+				g.Reason = core.LossConditionNoActivePlayers
 			}
 			g.Phase = phaseGameEnd
 		}
@@ -139,11 +150,11 @@ func (g *Game) ApplyPlayerAction(playerIndex int, actionCode int32) error {
 
 // --- accessors (int32-friendly for future WASM) ---
 
-func (g *Game) GameStatus() GameStatus     { return g.Status }
-func (g *Game) LossReason() LossCondition { return g.Reason }
-func (g *Game) Round() int32 { return g.round }
-func (g *Game) EmissionsCounter() int32   { return g.CarbonEmissions }
-func (g *Game) PlayerCount() int32 { return int32(g.NumPlayers) }
+func (g *Game) GameStatus() core.GameStatus    { return g.Status }
+func (g *Game) LossReason() core.LossCondition { return g.Reason }
+func (g *Game) Round() int32                   { return g.round }
+func (g *Game) EmissionsCounter() int32        { return g.CarbonEmissions }
+func (g *Game) PlayerCount() int32             { return int32(g.NumPlayers) }
 
 func (g *Game) TakeoverPoolMix() assets.AssetMix { return g.TakeoverPool }
 
@@ -156,9 +167,9 @@ func (g *Game) PlayerMoney(pi int) int32 {
 	return g.Players[pi].Money
 }
 
-func (g *Game) PlayerStatusI(pi int) PlayerStatus {
+func (g *Game) PlayerStatusI(pi int) core.PlayerStatus {
 	if pi < 0 || pi >= g.NumPlayers {
-		return PlayerStatusLost
+		return core.PlayerStatusLost
 	}
 	return g.Players[pi].Status
 }

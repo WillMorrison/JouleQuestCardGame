@@ -20,7 +20,7 @@ Full motivation and interface shape: [WASM_TRAINING_INTERFACE.md](../../WASM_TRA
 - **Exports**: use `//go:wasmexport` with **WASM-friendly signatures** — fixed-size integers (`int32` / `uint32` as appropriate). Prefer **one `int32` return** per export (e.g. value or error code), **integer parameters only**, matching the host embedding contract.
 - **Globals**: one documented **singleton game** and **singleton params** in the WASM library package is intentional.
 - **`init`**: do not rely on `init` for background work or non-deterministic setup.
-- **Package dependencies**: avoid depending on the `eventlog` package in anything other than tests under `compact/`, including indirectly via the `engine` package, to avoid pulling in TinyGo-incompatible dependencies like `encoding/json`. **Follow-up:** move shared enums from `engine` into `core` so `compact/game` can use one definition (see [WASM_TRAINING_INTERFACE.md](../../WASM_TRAINING_INTERFACE.md) § follow-up).
+- **Package dependencies**: avoid depending on the `eventlog` package in anything other than tests under `compact/`, including indirectly via the `engine` package, to avoid pulling in TinyGo-incompatible dependencies like `encoding/json`.
 
 ## Python bridge (`rl_agent/`, WASM path only)
 

@@ -2,6 +2,7 @@ package game
 
 import (
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
+	"github.com/WillMorrison/JouleQuestCardGame/core"
 	legacy "github.com/WillMorrison/JouleQuestCardGame/params"
 )
 
@@ -63,14 +64,14 @@ func assetTypeForAction(actionCode int32) assets.Type {
 }
 
 func (g *Game) possibleActionMask(pi int) uint32 {
-	if g.Status != GameStatusOngoing {
+	if g.Status != core.GameStatusOngoing {
 		return 0
 	}
 	if pi < 0 || pi >= g.NumPlayers {
 		return 0
 	}
 	p := &g.Players[pi]
-	if p.Status != PlayerStatusActive || !p.IsBuilding {
+	if p.Status != core.PlayerStatusActive || !p.IsBuilding {
 		return 0
 	}
 	var mask uint32

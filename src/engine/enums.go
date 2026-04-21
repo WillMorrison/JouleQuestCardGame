@@ -2,8 +2,6 @@ package engine
 
 import "github.com/WillMorrison/JouleQuestCardGame/eventlog"
 
-
-
 type GameLogEvent int
 
 var _ eventlog.Loggable = GameLogEvent(0)

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	cparams "github.com/WillMorrison/JouleQuestCardGame/compact/params"
+	"github.com/WillMorrison/JouleQuestCardGame/core"
 	"github.com/WillMorrison/JouleQuestCardGame/params"
 )
 
@@ -56,7 +57,7 @@ func TestApplyFinishedAdvancesWhenAllDone(t *testing.T) {
 		}
 	}
 	// runUntilBuildPhase runs one operate then startBuildPhase when still ongoing.
-	if g.Status != GameStatusOngoing {
+	if g.Status != core.GameStatusOngoing {
 		t.Fatalf("Status = %v, want ongoing", g.Status)
 	}
 	if g.Phase != phaseBuild {

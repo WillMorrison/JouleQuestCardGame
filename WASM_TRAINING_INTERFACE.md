@@ -96,17 +96,6 @@ Upstream **Go 1.24+** `GOOS=wasip1` + **`//go:wasmexport`** remains useful for *
 - **Binary size / toolchain**: the training WASM module is planned to be built with **TinyGo** (≥ **0.34** so **`//go:wasmexport`** is available), **`wasm-unknown`** reactor builds, prioritizing a **small binary** and alignment with the compact engine’s constraints. Stay within **TinyGo-supported stdlib and language features** (see [.cursor/rules/joulequest-wasm-training.mdc](.cursor/rules/joulequest-wasm-training.mdc)).
 - **Randomness**: [`OperatePhase`](src/engine/operation.go) today uses **`math/rand`** globally; the compact engine uses **`math/rand/v2.PCG`** for reproducible operate-phase draws.
 
-### Follow-up: shared enums in `core` (reduce `compact/game` duplication)
-
-[`src/compact/game`](src/compact/game) currently defines its own **`GameStatus`**, **`PlayerStatus`**, and **`LossCondition`** types so it does not **`import`** [`engine`](src/engine) (which pulls **`eventlog`** and other interactive-stack dependencies through shared files such as [`enums.go`](src/engine/enums.go)). This is problematic as eventlog depends on `encoding/json`, which is not supported in TinyGo.
-
-**Planned refactor:** extract those **pure enum types** (and any similar API-stable constants) from **`engine`** into [`src/core`](src/core) — a package that already holds cross-cutting types like [`PriceVolatility`](src/core/core.go) and is safe for **`compact/game`** to depend on. Then:
-
-- **`engine`** imports `core` for those enums (or uses type aliases if needed during migration).
-- **`compact/game`** drops its duplicate definitions and uses **`core`** instead, keeping a **single source of truth** for numeric constants exposed to REST, WASM, and parity tests.
-
-This is follow-up work for the maintainer when convenient; it is not required for the first WASM prototype to run.
-
 ## Roadmap (remainder of project)
 
 Tracked in the repo plan *WASM FFI training bridge*:

@@ -65,11 +65,11 @@ const (
 )
 
 type Params struct {
-	CapacityRule CapacityRule
-	CarbonTaxRule CarbonTaxRule
-	WinConditionRule WinConditionRule
+	CapacityRule             CapacityRule
+	CarbonTaxRule            CarbonTaxRule
+	WinConditionRule         WinConditionRule
 	GenerationConstraintRule GenerationConstraintRule
-	TakeoverRule TakeoverRule
+	TakeoverRule             TakeoverRule
 
 	InitialCash                   int
 	StartingFossilAssetsPerPlayer map[int]int
@@ -144,7 +144,7 @@ func (p Params) PnL(a assets.Asset, pv core.PriceVolatility, globalEmissions int
 		return p.RenewablePnL[pv]
 	case assets.TypeBattery:
 		if (a.Mode() & assets.OperationModeCapacity) != 0 {
-			switch p.CapacityRule{
+			switch p.CapacityRule {
 			case CapacityRulePaymentPerAsset:
 				return p.BatteryCapacityPnL[pv]
 			case CapacityRuleSharedCapacityPaymentPool:
@@ -161,11 +161,11 @@ func (p Params) PnL(a assets.Asset, pv core.PriceVolatility, globalEmissions int
 			tax = p.CarbonTaxCost
 		}
 		if (a.Mode() & assets.OperationModeCapacity) != 0 {
-			switch p.CapacityRule{
+			switch p.CapacityRule {
 			case CapacityRulePaymentPerAsset:
 				return p.FossilCapacityPnL[pv] - tax
 			case CapacityRuleSharedCapacityPaymentPool:
-				return p.CapacityPoolPnL[pv] / numCapacityAssets - tax
+				return p.CapacityPoolPnL[pv]/numCapacityAssets - tax
 			default: // includes NoCapacityMarket
 				return -defaultCost
 			}

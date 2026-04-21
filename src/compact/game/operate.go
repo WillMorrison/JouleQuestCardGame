@@ -27,7 +27,7 @@ func (g *Game) winConditionMet() bool {
 	case legacy.WinConditionRuleLastFossilLoses:
 		var n int
 		for i := 0; i < g.NumPlayers; i++ {
-			if g.Players[i].Status == PlayerStatusActive && g.Players[i].hasFossilAssets() {
+			if g.Players[i].Status == core.PlayerStatusActive && g.Players[i].hasFossilAssets() {
 				n++
 			}
 		}
@@ -57,20 +57,20 @@ func (g *Game) runOperatePhase() {
 	gridOutcome := snapshotFromGlobalMix(g.globalAssetMix())
 
 	if !g.generationConstraintMet(gridOutcome.AssetMix) {
-		g.Status = GameStatusLoss
-		g.Reason = LossConditionInsufficientGeneration
+		g.Status = core.GameStatusLoss
+		g.Reason = core.LossConditionInsufficientGeneration
 		return
 	}
 	if int32(gridOutcome.GridStability) < risk {
-		g.Status = GameStatusLoss
-		g.Reason = LossConditionGridUnstable
+		g.Status = core.GameStatusLoss
+		g.Reason = core.LossConditionGridUnstable
 		return
 	}
 
 	g.CarbonEmissions += int32(gridOutcome.AssetMix.Emissions())
 	if g.CarbonEmissions > g.Params.EmissionsCap {
-		g.Status = GameStatusLoss
-		g.Reason = LossConditionCarbonEmissionsExceeded
+		g.Status = core.GameStatusLoss
+		g.Reason = core.LossConditionCarbonEmissionsExceeded
 		return
 	}
 
@@ -83,14 +83,14 @@ func (g *Game) runOperatePhase() {
 	var numActive int
 	for i := 0; i < g.NumPlayers; i++ {
 		p := &g.Players[i]
-		if p.Status != PlayerStatusActive {
+		if p.Status != core.PlayerStatusActive {
 			continue
 		}
 		numActive++
 		pnl := g.Params.OperatePnLForPlayerMix(p.Mix, volIdx, g.CarbonEmissions, worldCap)
 		p.Money += pnl
 		if p.Money < 0 {
-			p.setLoss(LossConditionPlayerBankrupt)
+			p.setLoss(core.LossConditionPlayerBankrupt)
 			moveMixTo(&g.TakeoverPool, &p.Mix)
 			numActive--
 		}
@@ -99,8 +99,8 @@ func (g *Game) runOperatePhase() {
 	g.LastSnapshot = gridOutcome
 
 	if numActive == 0 {
-		g.Status = GameStatusLoss
-		g.Reason = LossConditionNoActivePlayers
+		g.Status = core.GameStatusLoss
+		g.Reason = core.LossConditionNoActivePlayers
 		return
 	}
 
@@ -111,18 +111,18 @@ func (g *Game) runOperatePhase() {
 	if g.Params.WinConditionRule == legacy.WinConditionRuleLastFossilLoses {
 		idx := g.firstPlayerIndexWithFossil()
 		if idx >= 0 {
-			g.Players[idx].setLoss(LossConditionLastPlayerWithFossilAssets)
+			g.Players[idx].setLoss(core.LossConditionLastPlayerWithFossilAssets)
 			numActive--
 			if numActive == 0 {
-				g.Status = GameStatusLoss
-				g.Reason = LossConditionNoActivePlayers
+				g.Status = core.GameStatusLoss
+				g.Reason = core.LossConditionNoActivePlayers
 				return
 			}
 		}
 	}
 
-	g.Status = GameStatusWin
-	g.Reason = LossConditionNone
+	g.Status = core.GameStatusWin
+	g.Reason = core.LossConditionNone
 }
 
 func (g *Game) firstPlayerIndexWithFossil() int {

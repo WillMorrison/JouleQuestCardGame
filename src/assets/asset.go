@@ -21,7 +21,7 @@ func (at Type) MarshalText() ([]byte, error) {
 }
 
 func (at *Type) UnmarshalText(text []byte) error {
-	switch string(text){
+	switch string(text) {
 	case TypeBattery.String():
 		*at = TypeBattery
 	case TypeRenewable.String():
