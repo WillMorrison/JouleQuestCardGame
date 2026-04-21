@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
-	"math/bits"
 	randv2 "math/rand/v2"
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
@@ -153,8 +152,8 @@ func (gs *GameState) movePlayerAssetsToTakeoverPool(pi int) {
 
 // SetRNGSeed seeds the operate-phase PCG RNG.
 func (gs *GameState) SetRNGSeed(seed uint64) {
-	// Two 64-bit words; second derived so a single-seed API still spreads state.
-	gs.pcg.Seed(seed, bits.ReverseBytes64(seed)^0xdeadbeefcafebabe)
+	// The seed is used directly, the stream index is fixed to 0.
+	gs.pcg.Seed(seed, 0)
 }
 
 // NewGame returns a new GameState ready to play

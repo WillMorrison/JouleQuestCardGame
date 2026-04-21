@@ -1,8 +1,6 @@
 package game
 
 import (
-	"math/bits"
-
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
 	"github.com/WillMorrison/JouleQuestCardGame/core"
 	legacy "github.com/WillMorrison/JouleQuestCardGame/params"
@@ -136,8 +134,8 @@ func (g *Game) firstPlayerIndexWithFossil() int {
 
 // SetRNGSeed seeds the operate-phase PCG RNG.
 func (g *Game) SetRNGSeed(seed uint64) {
-	// Two 64-bit words; second derived so a single-seed API still spreads state.
-	g.pcg.Seed(seed, bits.ReverseBytes64(seed)^0xdeadbeefcafebabe)
+	// The seed is used directly, the stream index is fixed to 0.
+	g.pcg.Seed(seed, 0)
 }
 
 // LastPriceVolatility exposes core enum for API parity.

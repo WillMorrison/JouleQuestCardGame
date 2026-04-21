@@ -94,7 +94,7 @@ Upstream **Go 1.24+** `GOOS=wasip1` + **`//go:wasmexport`** remains useful for *
 ## Tradeoffs and follow-ups
 
 - **Binary size / toolchain**: the training WASM module is planned to be built with **TinyGo** (≥ **0.34** so **`//go:wasmexport`** is available), **`wasm-unknown`** reactor builds, prioritizing a **small binary** and alignment with the compact engine’s constraints. Stay within **TinyGo-supported stdlib and language features** (see [.cursor/rules/joulequest-wasm-training.mdc](.cursor/rules/joulequest-wasm-training.mdc)).
-- **Randomness**: [`OperatePhase`](src/engine/operation.go) today uses **`math/rand`** globally; the compact engine uses **`math/rand/v2.PCG`** for reproducible operate-phase draws.
+- **Randomness**: [`OperatePhase`](src/engine/operation.go) and the compact engine both use **`math/rand/v2.PCG`** on game state for operate-phase draws, with **`SetRNGSeed(uint64)`** on [`GameState`](src/engine/game_state.go) and [`compact/game.Game`](src/compact/game/operate.go) so parity tests and RL can fix the sequence the same way on both sides.
 
 ## Roadmap (remainder of project)
 

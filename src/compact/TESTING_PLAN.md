@@ -21,7 +21,7 @@ Escalation when parity disagrees for non-observable reasons: see [.cursor/rules/
 - **Packages**: tests live next to code — `compact/game/*_test.go`, `compact/params/*_test.go`. Optional `compact/game/parity_test.go` (or `package game_test` in `parity_test.go`) if you want parity imports isolated.
 - **Patterns**: table-driven tests where many cases differ only on params or actions; helper `mustNewGame(t, players, params)` and `snapshotGame(t, g)` for comparable structs.
 - **Naming**: prefer names that read as rules, e.g. `TestInactivePlayersHaveNoPossibleActions`, `TestApplyPlayerAction_InvalidActionDoesNotMutateState`.
-- **Determinism**: any test touching operate-phase risk must **fix PCG** via [`SetRNGSeed`](game/operate.go) (or agreed seed) so runs are reproducible.
+- **Determinism**: any test touching operate-phase risk should **fix PCG seed** the same way on both sides — [`engine.GameState.SetRNGSeed`](../../engine/game_state.go) on the reference and [`Game.SetRNGSeed`](game/operate.go) on compact. When possible, avoid sensitivity to RNG stream in tests not directly related to operate phase risk.
 
 ---
 
@@ -35,15 +35,15 @@ Escalation when parity disagrees for non-observable reasons: see [.cursor/rules/
 
 ### 3.2 RNG alignment
 
-- Compact uses [`math/rand/v2.PCG`](game/operate.go) with [`SetRNGSeed`](game/operate.go). Reference uses [`math/rand.Intn`](../../engine/operation.go) on the global source.
-- **Plan**: either (a) The owner will refactor the legacy `engine` operate path to draw randomness from a PGC in `GameState` and provide a public `SeedRNG` method so parity tests can inject the same sequence as PCG, or (b) compare branches that **do not** draw risk until a shared story exists. **Document the chosen approach** in test helpers; if blocked, stop and escalate (per project rules).
+- Both paths draw operate-phase risk from **`math/rand/v2.PCG`** held on game state: [`OperatePhase`](../../engine/operation.go) uses `GameState.pcg`; compact uses [`Game.pcg`](game/game.go) with the same `Uint64() % 3` risk draw and the same two-word seeding scheme in [`SetRNGSeed`](../../engine/game_state.go) / [`Game.SetRNGSeed`](game/operate.go).
+- **Parity harness**: after constructing both games, call **`SetRNGSeed` with the same value** before any step that runs operate (and keep seeds in sync across the action stream if tests re-seed). Document the chosen default in helpers. If draws still diverge for a matched seed, stop and escalate (per project rules).
 
 ### 3.3 Scenario ladder
 
-1. **Minimal**: default [`params.Default`](../../params/params_default.go), 2 players, short scripted sequence (e.g. double-`Finished` through one operate) — smoke parity after RNG story is settled.
+1. **Minimal**: default [`params.Default`](../../params/params_default.go), 2 players, short scripted sequence (e.g. double-`Finished` through one operate) — smoke parity with **matched `SetRNGSeed`** on reference and compact.
 2. **Takeover / forced rule**: pool non-empty, affordable vs unaffordable takeovers, global loss `UnownedTakeoverAssets` vs `VirtualOwner` finish behavior.
 3. **Build / pledge / scrap**: costs, capacity market on/off via [`params.Builder`](../../params/builder.go) into `CompactParams` via [`FromLegacy`](params/params.go).
-4. **Operate outcomes**: bankruptcy → pool mix; generation cap; grid instability; emissions cap; win / last-fossil branch — each paired with **fixed seed** once RNG is aligned.
+4. **Operate outcomes**: bankruptcy → pool mix; generation cap; grid instability; emissions cap; win / last-fossil branch — each paired with **fixed, matched `SetRNGSeed`** on both engines.
 5. **Stress**: long pseudo-random legal action stream (fuzz-style driver) comparing observables every step (nightly or `-short` skip).
 
 ### 3.4 Failure triage
@@ -51,7 +51,7 @@ Escalation when parity disagrees for non-observable reasons: see [.cursor/rules/
 | Symptom | Action |
 |---------|--------|
 | Mixes and masks match; only slice order differs | Treat as reference bug or document; do not weaken compact tests. |
-| Global `rand` vs PCG mismatch | Fix reference hook or narrow test until aligned. |
+| PCG stream mismatch despite same seed | Verify both sides called `SetRNGSeed` identically and the same number of draws ran before the failing step; otherwise escalate. |
 | Ambiguous rule intent | Ask maintainer; capture answer in test name or comment. |
 
 ### 3.5 Specific scenarios
@@ -88,7 +88,7 @@ These document **rules of the game** independent of the reference implementation
 - **Build / scrap / takeover / takeover-scrap / pledge**: each legal transition updates **money** and **five-bucket mixes** (player + pool) consistently with costs from [`CompactParams`](params/params.go).
 - **Deterministic multiset removals**: scrap and pool removal prefer **arbitrage before capacity** per type (document with examples so future readers know why two orders of scrap can differ from legacy slices but match `AssetMix`).
 
-### 4.5 Operate phase (compact-only until RNG parity)
+### 4.5 Operate phase
 
 - **Generation constraint** (min / max-decrease), **grid vs risk** loss, **emissions cap**, **per-player PnL** and bankruptcy → pool, **all-bankrupt loss**, **win / last fossil** branches — one focused test each with minimal fixtures.
 - **Carbon tax / capacity rule variants**: table over [`CompactParams`](params/params.go) / `FromLegacy` builder combinations mirroring [`params.Params.PnL`](../../params/params.go) branches.

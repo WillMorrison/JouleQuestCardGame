@@ -32,7 +32,7 @@ type Game struct {
 	TakeoverPool    assets.AssetMix
 	LastSnapshot    Snapshot
 	Params          cparams.CompactParams
-	// pcg is operate-phase randomness (same role as math/rand in engine.OperatePhase).
+	// PCG RNG for operate-phase randomness
 	pcg randv2.PCG
 }
 
@@ -57,7 +57,6 @@ func NewGame(numPlayers int, p cparams.CompactParams) (*Game, error) {
 		g.Players[i].Mix.FossilsWholesale = n
 	}
 	g.refreshLastSnapshot()
-	g.SetRNGSeed(1)
 	g.startBuildPhase()
 	return &g, nil
 }
