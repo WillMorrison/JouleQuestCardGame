@@ -147,8 +147,8 @@ For each failure path, **capture state** (deep enough: status, reason, phase, ro
 
 ## 9. Checklist summary
 
-- [ ] Parity harness + observable field comparator + RNG story decided  
-- [ ] Masks vs reference (set equality) on small cases  
+- [x] Parity harness + observable field comparator + RNG story decided  
+- [x] Masks vs reference (set equality) on small cases  
 - [ ] Inactive / lost → no actions  
 - [ ] Forced takeover → cannot finish with pool non-empty  
 - [ ] Build start → modes reset for active players  
