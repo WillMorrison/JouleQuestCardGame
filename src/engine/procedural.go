@@ -48,6 +48,11 @@ func (pgs ProceduralGameState) Game() GameState {
 	return gs
 }
 
+// SetRNGSeed seeds the underlying game state's operate-phase PCG RNG.
+func (pgs *ProceduralGameState) SetRNGSeed(seed uint64) {
+	pgs.gs.SetRNGSeed(seed)
+}
+
 func (pgs ProceduralGameState) haveBuildingPlayers() bool {
 	for _, p := range pgs.gs.activePlayers() {
 		if p.isBuilding {
@@ -64,6 +69,11 @@ func (pgs *ProceduralGameState) startBuildPhase() {
 	pgs.gs.Round++
 	pgs.gs.Logger = pgs.gs.Logger.SetKey("round", pgs.gs.Round)
 	pgs.logEvent().With(GameLogEventStateMachineTransition).Log()
+	
+	for _, p := range pgs.gs.activePlayers() {
+		p.isBuilding = true
+		p.resetAllAssets()
+	}
 }
 
 func (pgs *ProceduralGameState) runUntilBuildPhase() {
