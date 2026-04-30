@@ -33,7 +33,7 @@ OBSERVATION_LOW = np.array([
     0,  # Player_AssetMix_FossilsCapacity
 ], dtype=np.int32)
 
-OBSERVATION_HIGH = np.array([
+OBSERVATION_SIZE = np.array([
     2,  # Game_Status
     7,  # Game_Reason
     1023,  # Game_Round
@@ -46,7 +46,7 @@ OBSERVATION_HIGH = np.array([
     3,  # Game_LastGridStability
     3,  # Game_LastPriceVolatility
     1,  # Player_Status
-    65535 - 1024 - 1,  # Player_Money (approx)
+    65535, # Player_Money (approx)
     1023,  # Player_AssetMix_Renewables
     1023,  # Player_AssetMix_BatteriesArbitrage
     1023,  # Player_AssetMix_BatteriesCapacity
@@ -55,7 +55,7 @@ OBSERVATION_HIGH = np.array([
 ], dtype=np.int32)
 
 OBSERVATION_SPACE = spaces.Dict({
-    "observation": spaces.Box(low=OBSERVATION_LOW, high=OBSERVATION_HIGH, dtype=np.int32),
+    "observation": spaces.MultiDiscrete(start=OBSERVATION_LOW, nvec=OBSERVATION_SIZE, dtype=np.int32),
     "action_mask": spaces.MultiBinary(15)
 })
 
@@ -205,7 +205,7 @@ class JoulequestEnv(AECEnv):
 
         possible_actions = [a for a in self._game_client.possible_actions if a.player_index==self._agent_index[self.agent_selection]]
         if not possible_actions:
-            # Chosen agent can't do anything, move along
+            # Chosen agent can't do anything, move along. They probably finished building already.
             self.agent_selection = self._select_active_agent()
             return
         try:
@@ -214,6 +214,7 @@ class JoulequestEnv(AECEnv):
             # Illegal action chosen, penalize and move along
             self.rewards[self.agent_selection] -= 10
             self.agent_selection = self._select_active_agent()
+            self._accumulate_rewards()
             return
 
         self._game_client.send_action(chosen_action)
@@ -288,7 +289,7 @@ class JoulequestEnv(AECEnv):
             player.assets.batteries_capacity,
             player.assets.fossils_wholesale,
             player.assets.fossils_capacity,
-        ], dtype=np.float32)
+        ], dtype=np.int32)
         
         return {
             "observation": observation,
