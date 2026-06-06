@@ -217,6 +217,9 @@ class JoulequestEnv(AECEnv):
             self._accumulate_rewards()
             return
 
+        if chosen_action.type_ in (PlayerActionType.SCRAPASSET, PlayerActionType.TAKEOVERSCRAPASSET) and chosen_action.asset_type == PlayerActionAssetType.FOSSIL:
+            self.rewards[self.agent_selection] += 1 # Small reward for scrapping fossil assets
+
         self._game_client.send_action(chosen_action)
 
         # Handle global game end conditions
@@ -233,16 +236,24 @@ class JoulequestEnv(AECEnv):
                 self.rewards[a] += self._game_client.game.players[a_i].money # Reward for successful capitalism
                 self.terminations[a] = True
 
-        # Handle player loss for active agents
+        # Handle individual player loss and reward. This is done for all players every round, so as not to
+        # unfairly reward players more just because they happen to have been chosen to play more steps.
         for a_i, a in enumerate(self.agents):
-            if not self.terminations[a] and self._game_client.game.players[a_i].status == PlayerStatus.LOST:
+            if self.terminations[a]:
+                continue
+            player = self._game_client.game.players[a_i]
+
+            if player.status == PlayerStatus.LOST:
                 self.rewards[a] -= 1000  # Large penalty for losing
                 self.terminations[a] = True
-
-        # Incremental rewards if the active agent is still in the game
-        player = self._game_client.game.players[self._agent_index[self.agent_selection]]
-        if player.status != PlayerStatus.LOST:
-            self.rewards[self.agent_selection] += 0.1 # Survival reward
+            elif player.status == PlayerStatus.ACTIVE:
+                # Survival reward to encourage not losing
+                self.rewards[a] += 0.1
+                # Small reward for accumulating money (encourages capitalism)
+                # self.rewards[a] += player.money * 0.01
+                # Small cost for holding fossil assets (encourages transition)
+                self.rewards[a] -= player.assets.fossils_capacity * 0.01
+                self.rewards[a] -= player.assets.fossils_wholesale * 0.01
 
         if not is_over:
             self.agent_selection = self._select_active_agent()
