@@ -15,7 +15,7 @@
 {{end}}
 
 {{define "ActionInput"}}
-<input type="radio" id="action_{{.GlobalIndex}}" name="action" value="{{.GlobalIndex}}">
+<input type="radio" id="action_{{.GlobalIndex}}" name="action" value="{{.GlobalIndex}}" required>
 <label for="action_{{.GlobalIndex}}">{{.Type.String}}{{if ne .Type 5}} {{.AssetType.String}} ({{.Cost}}){{end}}</label><br>
 {{end}}
 
@@ -24,7 +24,7 @@
     <th>Status</th>
     <th>Money</th>
     {{template "AssetMixHeaders"}}
-    <th>Actions</th>
+    <th><label for="submit_action">Actions</label> <input type="submit" value="Submit" id="submit_action"></th>
 {{end}}
 
 {{define "PlayerCells"}}
@@ -47,7 +47,7 @@
     {{template "AssetMixHeaders" "Last"}}
 </tr>
 <tr>
-    <td>{{.Status.String}}{{if eq .Status 1}} ({{.Reason.String}}){{end}}</td>
+    <td>{{.Status.String}}{{if eq .Status 2}} ({{.Reason.String}}){{end}}</td>
     <td>{{.Round}}</td>
     <td>{{.CarbonEmissions}}</td>
     <td>{{.LastRoundGridStability}}</td>
@@ -63,16 +63,42 @@
 </table>
 {{end}}
 
+{{define "Players"}}
+<h2>Players</h2>
+<form method="POST">
+<table>
+    <tr>{{template "PlayerHeaders"}}</tr>
+    {{range .Players}}<tr>{{template "PlayerCells" .}}</tr>{{end}}
+</table>
+</form>
+{{end}}
+
+{{define "Parameters"}}
+<h2>Parameters</h2>
+<p>
+Emission limit: {{.Params.EmissionsCap}}<br>
+Generation Constraint: {{.Params.GenerationConstraint}}<br>
+</p>
+<h3>Profit & Loss by Price Volatility</h3>
+<table>
+<thead>
+<tr><th></th><th>Low</th><th>Medium</th><th>High</th><th>Extreme</th></tr>
+</thead>
+</tbody>
+<tr><th>Fossil Wholesale</th><td>{{index .Params.FossilWholesalePnL 0}}</td><td>{{index .Params.FossilWholesalePnL 1}}</td><td>{{index .Params.FossilWholesalePnL 2}}</td><td>{{index .Params.FossilWholesalePnL 3}}</td></tr>
+<tr><th>Fossil Capacity</th><td>{{index .Params.FossilCapacityPnL 0}}</td><td>{{index .Params.FossilCapacityPnL 1}}</td><td>{{index .Params.FossilCapacityPnL 2}}</td><td>{{index .Params.FossilCapacityPnL 3}}</td></tr>
+<tr><th>Battery Arbitrage</th><td>{{index .Params.BatteryArbitragePnL 0}}</td><td>{{index .Params.BatteryArbitragePnL 1}}</td><td>{{index .Params.BatteryArbitragePnL 2}}</td><td>{{index .Params.BatteryArbitragePnL 3}}</td></tr>
+<tr><th>Battery Capacity</th><td>{{index .Params.BatteryCapacityPnL 0}}</td><td>{{index .Params.BatteryCapacityPnL 1}}</td><td>{{index .Params.BatteryCapacityPnL 2}}</td><td>{{index .Params.BatteryCapacityPnL 3}}</td></tr>
+<tr><th>Renewable</th><td>{{index .Params.RenewablePnL 0}}</td><td>{{index .Params.RenewablePnL 1}}</td><td>{{index .Params.RenewablePnL 2}}</td><td>{{index .Params.RenewablePnL 3}}</td></tr>
+</tbody>
+</table>
+{{end}}
 
 <body>
 <div>
 <h1>JouleQuest</h1>
 {{template "Game" .}}
-
-<h2>Players</h2>
-<table>
-    <tr>{{template "PlayerHeaders"}}</tr>
-    {{range .Players}}<tr>{{template "PlayerCells" .}}</tr>{{end}}
-</table>
+{{template "Players" .}}
+{{template "Parameters" .}}
 </div>
 </body>
