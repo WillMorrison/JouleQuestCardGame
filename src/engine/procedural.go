@@ -69,7 +69,7 @@ func (pgs *ProceduralGameState) startBuildPhase() {
 	pgs.gs.Round++
 	pgs.gs.Logger = pgs.gs.Logger.SetKey("round", pgs.gs.Round)
 	pgs.logEvent().With(GameLogEventStateMachineTransition).Log()
-	
+
 	for _, p := range pgs.gs.activePlayers() {
 		p.isBuilding = true
 		p.resetAllAssets()

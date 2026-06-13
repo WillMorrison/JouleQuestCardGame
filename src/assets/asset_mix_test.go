@@ -531,7 +531,7 @@ func TestAdd(t *testing.T) {
 		BatteriesArbitrage: 5, // 3+2
 		BatteriesCapacity:  2, // 1+1
 		FossilsWholesale:   5, // 4+1
-		FossilsCapacity:	7, // 5+2
+		FossilsCapacity:    7, // 5+2
 	}
 	if am != want {
 		t.Errorf("Add(%+v) = %+v, want %+v", other, am, want)

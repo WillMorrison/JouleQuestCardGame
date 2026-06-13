@@ -58,7 +58,7 @@ func actionCodeToLegacy(pi int, actionCode int32, p legacy.Params) engine.Player
 func checkParity(t *testing.T, step int, pgs *engine.ProceduralGameState, cg *game.Game) {
 	t.Helper()
 	legacyGame := pgs.Game()
-	
+
 	if legacyGame.Status != cg.GameStatus() {
 		t.Errorf("step %d: Status mismatch: legacy=%v, compact=%v", step, legacyGame.Status, cg.GameStatus())
 	}
@@ -71,7 +71,7 @@ func checkParity(t *testing.T, step int, pgs *engine.ProceduralGameState, cg *ga
 	if int32(legacyGame.CarbonEmissions) != cg.EmissionsCounter() {
 		t.Errorf("step %d: Emissions mismatch: legacy=%v, compact=%v", step, legacyGame.CarbonEmissions, cg.EmissionsCounter())
 	}
-	
+
 	if legacyGame.LastSnapshot.AssetMix != cg.LastRoundAssetMix() {
 		t.Errorf("step %d: LastSnapshot.AssetMix mismatch: legacy=%+v, compact=%+v", step, legacyGame.LastSnapshot.AssetMix, cg.LastRoundAssetMix())
 	}
@@ -86,11 +86,11 @@ func checkParity(t *testing.T, step int, pgs *engine.ProceduralGameState, cg *ga
 		pStatus := cg.PlayerStatusI(i)
 		pMoney := cg.PlayerMoney(i)
 		pMix := cg.PlayerAssetMix(i)
-		
+
 		var legacyStatus core.PlayerStatus
 		var legacyMoney int
 		var legacyMix assets.AssetMix
-		
+
 		if i < len(legacyGame.Players) {
 			legacyStatus = legacyGame.Players[i].Status
 			legacyMoney = legacyGame.Players[i].Money
@@ -100,7 +100,7 @@ func checkParity(t *testing.T, step int, pgs *engine.ProceduralGameState, cg *ga
 		} else {
 			legacyStatus = core.PlayerStatusLost
 		}
-		
+
 		if legacyStatus != pStatus {
 			t.Errorf("step %d: player %d Status mismatch: legacy=%v, compact=%v", step, i, legacyStatus, pStatus)
 		}
@@ -112,7 +112,7 @@ func checkParity(t *testing.T, step int, pgs *engine.ProceduralGameState, cg *ga
 				t.Errorf("step %d: player %d Mix mismatch: legacy=%+v, compact=%+v", step, i, legacyMix, pMix)
 			}
 		}
-		
+
 		// Check possible actions mask
 		legacyMask := uint32(0)
 		for _, la := range pgs.PossibleActions() {
@@ -129,7 +129,7 @@ func checkParity(t *testing.T, step int, pgs *engine.ProceduralGameState, cg *ga
 			t.Errorf("step %d: player %d PossibleActionMask mismatch: legacy=%b, compact=%b", step, i, legacyMask, compactMask)
 		}
 	}
-	
+
 	// Takeover pool mix
 	var legacyTakeover assets.AssetMix
 	for _, a := range legacyGame.TakeoverPool {
@@ -146,33 +146,33 @@ func runParityScenario(t *testing.T, numPlayers int, legacyParams legacy.Params,
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	logger := eventlog.NullLogger{}
 	pgs, err := engine.NewProceduralGame(numPlayers, legacyParams, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	cg, err := game.NewGame(numPlayers, compactParams)
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	checkParity(t, -1, pgs, cg) // initial state
-	
+
 	for i, step := range steps {
 		// Set seed before every apply just in case an operate phase triggers
 		pgs.SetRNGSeed(seed)
 		cg.SetRNGSeed(seed)
-		
+
 		legacyAction := actionCodeToLegacy(step.playerIndex, step.actionCode, legacyParams)
 		pgs.ApplyPlayerAction(legacyAction)
-		
+
 		err := cg.ApplyPlayerAction(step.playerIndex, step.actionCode)
 		if err != nil {
 			t.Fatalf("step %d: %v", i, err)
 		}
-		
+
 		checkParity(t, i, pgs, cg)
 	}
 }
@@ -188,7 +188,7 @@ func TestParity_BuildScrapPledge(t *testing.T) {
 	b := legacy.BuilderFrom(legacy.Default)
 	b.TakeoverRule(legacy.TakeoverRuleVirtualOwner)
 	b.InitialCash(100)
-	
+
 	runParityScenario(t, 2, b.Build(), 100, []actionStep{
 		{0, game.ActionBuildBattery},
 		{0, game.ActionPledgeBattery},
@@ -202,7 +202,7 @@ func TestParity_TakeoverForcedRule(t *testing.T) {
 	b := legacy.BuilderFrom(legacy.Default)
 	b.TakeoverRule(legacy.TakeoverRuleForcedTakeover)
 	b.InitialCash(0) // forced bankruptcy
-	
+
 	runParityScenario(t, 2, b.Build(), 42, []actionStep{
 		{0, game.ActionFinished},
 		{1, game.ActionFinished},
@@ -216,7 +216,7 @@ func TestParity_OperateOutcomes(t *testing.T) {
 	b.CarbonTax(legacy.CarbonTaxRuleApplyCarbonTax, 2, 50)
 	b.WinConditionRule(legacy.WinConditionRuleLastFossilLoses, 0)
 	b.InitialCash(50)
-	
+
 	runParityScenario(t, 2, b.Build(), 123, []actionStep{
 		{0, game.ActionFinished},
 		{1, game.ActionFinished}, // should trigger operate and emissions cap or bankruptcy
@@ -227,34 +227,34 @@ func TestParity_Stress(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping stress test in short mode")
 	}
-	
+
 	b := legacy.BuilderFrom(legacy.Default)
 	b.Capacity(legacy.CapacityRuleNoCapacityMarket, core.PnLTable{}, core.PnLTable{}, core.PnLTable{})
 	legacyParams := b.Build()
 	compactParams, _ := cparams.FromLegacy(legacyParams)
-	
+
 	logger := eventlog.NullLogger{}
 	pgs, err := engine.NewProceduralGame(3, legacyParams, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	cg, err := game.NewGame(3, compactParams)
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	rng := rand.New(rand.NewPCG(42, 0))
 	var seed uint64 = 42
-	
+
 	for step := range 100 {
 		if cg.GameStatus() != core.GameStatusOngoing {
 			break
 		}
-		
-		pgs.SetRNGSeed(seed+uint64(step))
-		cg.SetRNGSeed(seed+uint64(step))
-		
+
+		pgs.SetRNGSeed(seed + uint64(step))
+		cg.SetRNGSeed(seed + uint64(step))
+
 		// Find a random valid action across all players
 		var valid []actionStep
 		for pi := 0; pi < 3; pi++ {
@@ -268,20 +268,20 @@ func TestParity_Stress(t *testing.T) {
 				}
 			}
 		}
-		
+
 		if len(valid) == 0 {
 			t.Fatalf("No valid actions but game is ongoing at step %d", step)
 		}
-		
+
 		chosen := valid[rng.IntN(len(valid))]
-		
+
 		legacyAction := actionCodeToLegacy(chosen.playerIndex, chosen.actionCode, legacyParams)
 		pgs.ApplyPlayerAction(legacyAction)
 		err := cg.ApplyPlayerAction(chosen.playerIndex, chosen.actionCode)
 		if err != nil {
 			t.Fatalf("step %d: %v", step, err)
 		}
-		
+
 		checkParity(t, step, pgs, cg)
 	}
 }
