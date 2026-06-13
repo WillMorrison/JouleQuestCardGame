@@ -36,6 +36,130 @@ func (am *AssetMix) AddAsset(a Asset) {
 	}
 }
 
+// AddOneAsset adds an asset of the given type to the AssetMix, using the default operation mode.
+func (am *AssetMix) AddOneAsset(at Type) {
+	switch at {
+	case TypeRenewable:
+		am.Renewables++
+	case TypeBattery:
+		am.BatteriesArbitrage++
+	case TypeFossil:
+		am.FossilsWholesale++
+	}
+}
+
+// RemoveOneAsset removes one asset of the given type from the AssetMix, starting with capacity mode assets.
+// If there are no assets of the given type, this function does nothing.
+func (am *AssetMix) RemoveOneAsset(at Type) {
+	switch at {
+	case TypeRenewable:
+		if am.Renewables > 0 {
+			am.Renewables--
+		}
+	case TypeBattery:
+		if am.BatteriesCapacity > 0 {
+			am.BatteriesCapacity--
+		} else if am.BatteriesArbitrage > 0 {
+			am.BatteriesArbitrage--
+		}
+	case TypeFossil:
+		if am.FossilsCapacity > 0 {
+			am.FossilsCapacity--
+		} else if am.FossilsWholesale > 0 {
+			am.FossilsWholesale--
+		}
+	}
+}
+
+// Clear resets the AssetMix to an empty state.
+func (am *AssetMix) Clear() {
+	am.Renewables = 0
+	am.BatteriesArbitrage = 0
+	am.BatteriesCapacity = 0
+	am.FossilsWholesale = 0
+	am.FossilsCapacity = 0
+}
+
+// PledgeOneAsset moves an asset of the given type from its default operation mode to its capacity operation mode.
+// If there are no assets of the given type in the default operation mode, or if the asset type cannot be pledged, this function does nothing.
+func (am *AssetMix) PledgeOneAsset(at Type) {
+	switch {
+	case at == TypeBattery && am.BatteriesArbitrage > 0:
+		am.BatteriesArbitrage--
+		am.BatteriesCapacity++
+	case at == TypeFossil && am.FossilsWholesale > 0:
+		am.FossilsWholesale--
+		am.FossilsCapacity++
+	}
+}
+
+// CanPledgeOneAsset returns whether there is at least one asset of the given type that can be pledged to capacity operation mode.
+func (am AssetMix) CanPledgeOneAsset(at Type) bool {
+	switch {
+	case at == TypeBattery && am.BatteriesArbitrage > 0:
+		return true
+	case at == TypeFossil && am.FossilsWholesale > 0:
+		return true
+	default:
+		return false
+	}
+}
+
+// ResetAllCapacityPledges moves all assets in capacity operation mode back to their default operation mode.
+func (am *AssetMix) ResetAllCapacityPledges() {
+	am.BatteriesArbitrage += am.BatteriesCapacity
+	am.BatteriesCapacity = 0
+	am.FossilsWholesale += am.FossilsCapacity
+	am.FossilsCapacity = 0
+}
+
+// TakeOneAssetFrom takes one asset of the given type from another AssetMix and adds it to this AssetMix, if possible.
+// If the other AssetMix has no assets of the given type, this function does nothing.
+// Assets taken from the other AssetMix will revert to their default operation modes.
+func (am *AssetMix) TakeOneAssetFrom(at Type, other *AssetMix) {
+	switch at {
+	case TypeRenewable:
+		if other.Renewables > 0 {
+			other.Renewables--
+			am.Renewables++
+		}
+	case TypeBattery:
+		if other.BatteriesCapacity > 0 {
+			other.BatteriesCapacity--
+			am.BatteriesArbitrage++
+		} else if other.BatteriesArbitrage > 0 {
+			other.BatteriesArbitrage--
+			am.BatteriesArbitrage++
+		}
+	case TypeFossil:
+		if other.FossilsCapacity > 0 {
+			other.FossilsCapacity--
+			am.FossilsWholesale++
+		} else if other.FossilsWholesale > 0 {
+			other.FossilsWholesale--
+			am.FossilsWholesale++
+		}
+	}
+}
+
+// TakeAllAssetsFrom adds the assets from another AssetMix to this one, leaving the other AssetMix empty.
+// Assets added to this AssetMix will revert to their default operation modes.
+func (am *AssetMix) TakeAllAssetsFrom(other *AssetMix) {
+	am.Renewables += other.AssetsOfType(TypeRenewable)
+	am.BatteriesArbitrage += other.AssetsOfType(TypeBattery)
+	am.FossilsWholesale += other.AssetsOfType(TypeFossil)
+	other.Clear()
+}
+
+// Add adds the assets from another AssetMix to this one, preserving operation modes.
+func (am *AssetMix) Add(other AssetMix) {
+	am.Renewables += other.Renewables
+	am.BatteriesArbitrage += other.BatteriesArbitrage
+	am.BatteriesCapacity += other.BatteriesCapacity
+	am.FossilsWholesale += other.FossilsWholesale
+	am.FossilsCapacity += other.FossilsCapacity
+}
+
 func (am AssetMix) AssetsOfType(at Type) int {
 	switch at {
 	case TypeBattery:
