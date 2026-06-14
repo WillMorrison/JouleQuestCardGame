@@ -2,7 +2,6 @@ package assets
 
 import (
 	"fmt"
-	"iter"
 	"strings"
 )
 
@@ -13,27 +12,6 @@ type AssetMix struct {
 	BatteriesCapacity  int
 	FossilsWholesale   int
 	FossilsCapacity    int
-}
-
-func (am *AssetMix) AddAsset(a Asset) {
-	switch a.Type() {
-	case TypeRenewable:
-		am.Renewables++
-	case TypeBattery:
-		switch a.Mode() & OperationModeCapacity {
-		case OperationModeCapacity:
-			am.BatteriesCapacity++
-		default:
-			am.BatteriesArbitrage++
-		}
-	case TypeFossil:
-		switch a.Mode() & OperationModeCapacity {
-		case OperationModeCapacity:
-			am.FossilsCapacity++
-		default:
-			am.FossilsWholesale++
-		}
-	}
 }
 
 // AddOneAsset adds an asset of the given type to the AssetMix, using the default operation mode.
@@ -196,14 +174,6 @@ func (am AssetMix) RenewablePenetration() int {
 		return 0
 	}
 	return (am.Renewables * 100) / totalGen
-}
-
-// AssetMixFrom creates a new AssetMix from an Asset iterator
-func AssetMixFrom(it iter.Seq[Asset]) (am AssetMix) {
-	for a := range it {
-		am.AddAsset(a)
-	}
-	return
 }
 
 // Coefficients for summing (multiples of) asset types in calculations.
