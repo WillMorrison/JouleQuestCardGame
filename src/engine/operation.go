@@ -115,12 +115,9 @@ func OperatePhase(gs *GameState) StateRunner {
 	for pi, p := range gs.activePlayers() {
 		pLogger := logger.Sub().SetKey("player_index", pi)
 		numActivePlayers++
-		var playerPnL int
-		for _, a := range p.Assets {
-			playerPnL += gs.Params.PnL(a, gridOutcome.PriceVolatility, gs.CarbonEmissions, gridOutcome.AssetMix.CapacityAssets())
-		}
+		playerPnL := gs.playerPnL(pi, gridOutcome)
 		p.Money += playerPnL
-		pLogger.Event().WithKey("player_asset_mix", p.getAssetMix()).WithKey("player_PnL", playerPnL).WithKey("player_money", p.Money).With(GameLogEventMarketOutcome).Log()
+		pLogger.Event().WithKey("player_asset_mix", p.Assets).WithKey("player_PnL", playerPnL).WithKey("player_money", p.Money).With(GameLogEventMarketOutcome).Log()
 
 		// Check player loss conditions
 		if p.Money < 0 {
@@ -167,4 +164,26 @@ func OperatePhase(gs *GameState) StateRunner {
 	gs.Status = core.GameStatusWin
 	logger.Event().With(GameLogEventGlobalWin).Log()
 	return GameEnd
+}
+
+// PnL calculates the profit or loss for one player
+func (gs GameState) playerPnL(pi int, gridOutcome Snapshot) int {
+	p := gs.Params
+	am := gs.Players[pi].Assets
+
+	pnl := 0
+	pnl += am.Renewables * p.RenewablePnL[gridOutcome.PriceVolatility]
+	pnl += am.BatteriesArbitrage * p.BatteryArbitragePnL[gridOutcome.PriceVolatility]
+	pnl += am.FossilsWholesale * p.FossilWholesalePnL[gridOutcome.PriceVolatility]
+	switch p.CapacityRule {
+	case params.CapacityRulePaymentPerAsset:
+		pnl += am.BatteriesCapacity * p.BatteryCapacityPnL[gridOutcome.PriceVolatility]
+		pnl += am.FossilsCapacity * p.FossilCapacityPnL[gridOutcome.PriceVolatility]
+	case params.CapacityRuleSharedCapacityPaymentPool:
+		pnl += am.CapacityAssets() * p.CapacityPoolPnL[gridOutcome.PriceVolatility] / gridOutcome.AssetMix.CapacityAssets()
+	}
+	if p.CarbonTaxRule == params.CarbonTaxRuleApplyCarbonTax && gs.CarbonEmissions > p.CarbonTaxThreshold {
+		pnl -= am.AssetsOfType(assets.TypeFossil) * p.CarbonTaxCost
+	}
+	return pnl
 }

@@ -2,9 +2,7 @@ package engine
 
 import (
 	"errors"
-	"slices"
 
-	"github.com/WillMorrison/JouleQuestCardGame/assets"
 	"github.com/WillMorrison/JouleQuestCardGame/core"
 	"github.com/WillMorrison/JouleQuestCardGame/eventlog"
 	"github.com/WillMorrison/JouleQuestCardGame/params"
@@ -123,12 +121,11 @@ func (pgs *ProceduralGameState) ApplyPlayerAction(chosenAction PlayerAction) {
 			if pgs.gs.Params.TakeoverRule == params.TakeoverRuleForcedTakeover {
 				// game loss, assets in takeover pool that nobody can afford to take over
 				pgs.gs.SetGlobalLossWithReason(core.LossConditionUnownedTakeoverAssets)
-				takeoverMix := assets.AssetMixFrom(slices.Values(pgs.gs.TakeoverPool))
 				var money []int
 				for _, p := range pgs.gs.Players {
 					money = append(money, p.Money)
 				}
-				pgs.logEvent().With(GameLogEventEveryoneLoses, pgs.gs.Reason).WithKey("takeover_pool", takeoverMix).WithKey("player_funds", money).Log()
+				pgs.logEvent().With(GameLogEventEveryoneLoses, pgs.gs.Reason).WithKey("takeover_pool", pgs.gs.TakeoverPool).WithKey("player_funds", money).Log()
 			} else {
 				pgs.gs.SetGlobalLossWithReason(core.LossConditionNoActivePlayers) // Should never happen, but if it does, force a game loss
 				pgs.logEvent().With(GameLogEventEveryoneLoses, pgs.gs.Reason).Log()

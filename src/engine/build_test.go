@@ -10,29 +10,6 @@ import (
 	"github.com/WillMorrison/JouleQuestCardGame/params"
 )
 
-func makeAssets(am assets.AssetMix) (as []assets.Asset) {
-	for range am.Renewables {
-		as = append(as, assets.New(assets.TypeRenewable))
-	}
-	for range am.BatteriesArbitrage {
-		as = append(as, assets.New(assets.TypeBattery))
-	}
-	for range am.BatteriesCapacity {
-		a := assets.New(assets.TypeBattery)
-		a.SetMode(assets.OperationModeCapacity)
-		as = append(as, a)
-	}
-	for range am.FossilsWholesale {
-		as = append(as, assets.New(assets.TypeFossil))
-	}
-	for range am.FossilsCapacity {
-		a := assets.New(assets.TypeFossil)
-		a.SetMode(assets.OperationModeCapacity)
-		as = append(as, a)
-	}
-	return
-}
-
 func cmpPlayerAction(a, b PlayerAction) int {
 	return cmp.Or(cmp.Compare(a.Type, b.Type),
 		cmp.Compare(a.PlayerIndex, b.PlayerIndex),
@@ -49,7 +26,7 @@ func Test_GameState_possibleActions_NoActionsIfNotBuilding(t *testing.T) {
 			},
 		},
 		Params:       params.Default,
-		TakeoverPool: nil,
+		TakeoverPool: assets.AssetMix{},
 	}
 	got := gameState.possibleActions()
 	if len(got) != 0 {
@@ -66,7 +43,7 @@ func Test_GameState_possibleActions_NoActionsIfLost(t *testing.T) {
 			},
 		},
 		Params:       params.Default,
-		TakeoverPool: nil,
+		TakeoverPool: assets.AssetMix{},
 	}
 	got := gameState.possibleActions()
 	if len(got) != 0 {
@@ -84,7 +61,7 @@ func Test_GameState_possibleActions_CanFinishIfTakeoverPoolEmpty(t *testing.T) {
 			},
 		},
 		Params:       params.Default,
-		TakeoverPool: nil,
+		TakeoverPool: assets.AssetMix{},
 	}
 	got := gameState.possibleActions()
 	want := PlayerAction{
@@ -107,7 +84,7 @@ func Test_GameState_possibleActions_CannotFinishIfTakeoverPoolHasAssetsWithForce
 			},
 		},
 		Params:       params.BuilderFrom(params.Default).TakeoverRule(params.TakeoverRuleForcedTakeover).Build(),
-		TakeoverPool: makeAssets(assets.AssetMix{BatteriesArbitrage: 1}),
+		TakeoverPool: assets.AssetMix{BatteriesArbitrage: 1},
 	}
 	got := gameState.possibleActions()
 	if slices.ContainsFunc(got, func(pa PlayerAction) bool { return pa.Type == ActionTypeFinished }) {
@@ -125,7 +102,7 @@ func Test_GameState_possibleActions_CanFinishIfTakeoverPoolHasAssetsWithVirtualO
 			},
 		},
 		Params:       params.BuilderFrom(params.Default).TakeoverRule(params.TakeoverRuleVirtualOwner).Build(),
-		TakeoverPool: makeAssets(assets.AssetMix{BatteriesArbitrage: 1}),
+		TakeoverPool: assets.AssetMix{BatteriesArbitrage: 1},
 	}
 	got := gameState.possibleActions()
 	want := PlayerAction{
@@ -144,12 +121,12 @@ func Test_GameState_possibleActions_CanPledgeAssetsForFree(t *testing.T) {
 			{
 				Status:     core.PlayerStatusActive,
 				Money:      0,
-				Assets:     makeAssets(assets.AssetMix{BatteriesArbitrage: 1}),
+				Assets:     assets.AssetMix{BatteriesArbitrage: 1},
 				isBuilding: true,
 			},
 		},
 		Params:       params.Default,
-		TakeoverPool: nil,
+		TakeoverPool: assets.AssetMix{},
 	}
 	got := gameState.possibleActions()
 	want := PlayerAction{
@@ -169,12 +146,12 @@ func Test_GameState_possibleActions_CannotPledgeAssetsAgainstRules(t *testing.T)
 			{
 				Status:     core.PlayerStatusActive,
 				Money:      0,
-				Assets:     makeAssets(assets.AssetMix{BatteriesArbitrage: 1}),
+				Assets:     assets.AssetMix{BatteriesArbitrage: 1},
 				isBuilding: true,
 			},
 		},
 		Params:       params.BuilderFrom(params.Default).Capacity(params.CapacityRuleNoCapacityMarket, core.PnLTable{}, core.PnLTable{}, core.PnLTable{}).Build(),
-		TakeoverPool: nil,
+		TakeoverPool: assets.AssetMix{},
 	}
 	got := gameState.possibleActions()
 	if slices.ContainsFunc(got, func(pa PlayerAction) bool { return pa.Type == ActionTypePledgeCapacity }) {
@@ -188,12 +165,12 @@ func Test_GameState_possibleActions_CannotPledgeRenewables(t *testing.T) {
 			{
 				Status:     core.PlayerStatusActive,
 				Money:      0,
-				Assets:     makeAssets(assets.AssetMix{Renewables: 1}),
+				Assets:     assets.AssetMix{Renewables: 1},
 				isBuilding: true,
 			},
 		},
 		Params:       params.Default,
-		TakeoverPool: nil,
+		TakeoverPool: assets.AssetMix{},
 	}
 	got := gameState.possibleActions()
 	if slices.ContainsFunc(got, func(pa PlayerAction) bool { return pa.Type == ActionTypePledgeCapacity }) {
@@ -207,12 +184,12 @@ func Test_GameState_possibleActions_CannotPledgeAlreadyPledgedAssets(t *testing.
 			{
 				Status:     core.PlayerStatusActive,
 				Money:      0,
-				Assets:     makeAssets(assets.AssetMix{BatteriesCapacity: 1, FossilsCapacity: 1}),
+				Assets:     assets.AssetMix{BatteriesCapacity: 1, FossilsCapacity: 1},
 				isBuilding: true,
 			},
 		},
 		Params:       params.Default,
-		TakeoverPool: nil,
+		TakeoverPool: assets.AssetMix{},
 	}
 	got := gameState.possibleActions()
 	if slices.ContainsFunc(got, func(pa PlayerAction) bool { return pa.Type == ActionTypePledgeCapacity }) {
@@ -227,11 +204,11 @@ func Test_GameState_possibleActions_CanBuildWithSufficientMoney(t *testing.T) {
 				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      100,
-				Assets:     nil,
+				Assets:     assets.AssetMix{},
 			},
 		},
 		Params:       params.BuilderFrom(params.Default).RenewableCosts(50, 40).FossilCosts(50, 40).BatteryCosts(50, 40).Build(),
-		TakeoverPool: nil,
+		TakeoverPool: assets.AssetMix{},
 	}
 	got := gameState.possibleActions()
 	for _, at := range assets.Types {
@@ -254,11 +231,11 @@ func Test_GameState_possibleActions_CanScrapWithSufficientMoney(t *testing.T) {
 				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      100,
-				Assets:     makeAssets(assets.AssetMix{Renewables: 1, FossilsWholesale: 1, BatteriesCapacity: 1}),
+				Assets:     assets.AssetMix{Renewables: 1, FossilsWholesale: 1, BatteriesCapacity: 1},
 			},
 		},
 		Params:       params.BuilderFrom(params.Default).RenewableCosts(50, 40).FossilCosts(50, 40).BatteryCosts(50, 40).Build(),
-		TakeoverPool: nil,
+		TakeoverPool: assets.AssetMix{},
 	}
 	got := gameState.possibleActions()
 	for _, at := range assets.Types {
@@ -281,11 +258,11 @@ func Test_GameState_possibleActions_CanTakeoverWithSufficientMoney(t *testing.T)
 				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      100,
-				Assets:     nil,
+				Assets:     assets.AssetMix{},
 			},
 		},
 		Params:       params.BuilderFrom(params.Default).RenewableCosts(50, 40).FossilCosts(50, 40).BatteryCosts(50, 40).Build(),
-		TakeoverPool: makeAssets(assets.AssetMix{Renewables: 1, FossilsWholesale: 1, BatteriesArbitrage: 1}),
+		TakeoverPool: assets.AssetMix{Renewables: 1, FossilsWholesale: 1, BatteriesArbitrage: 1},
 	}
 	got := gameState.possibleActions()
 	for _, at := range assets.Types {
@@ -312,11 +289,11 @@ func Test_GameState_possibleActions_InsufficientMoney(t *testing.T) {
 				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      10,
-				Assets:     makeAssets(assets.AssetMix{Renewables: 1, FossilsWholesale: 1, FossilsCapacity: 1, BatteriesArbitrage: 1, BatteriesCapacity: 1}),
+				Assets:     assets.AssetMix{Renewables: 1, FossilsWholesale: 1, FossilsCapacity: 1, BatteriesArbitrage: 1, BatteriesCapacity: 1},
 			},
 		},
 		Params:       params.BuilderFrom(params.Default).RenewableCosts(50, 40).FossilCosts(50, 40).BatteryCosts(50, 40).Build(),
-		TakeoverPool: makeAssets(assets.AssetMix{Renewables: 1, FossilsWholesale: 1, BatteriesArbitrage: 1}),
+		TakeoverPool: assets.AssetMix{Renewables: 1, FossilsWholesale: 1, BatteriesArbitrage: 1},
 	}
 	got := gameState.possibleActions()
 	if slices.ContainsFunc(got, func(pa PlayerAction) bool {
@@ -336,29 +313,29 @@ func Test_GameState_possibleActions_MultiplePlayers(t *testing.T) {
 				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      0, // Can pledge to capacity
-				Assets:     makeAssets(assets.AssetMix{Renewables: 1, FossilsWholesale: 1, FossilsCapacity: 1, BatteriesArbitrage: 1, BatteriesCapacity: 1}),
+				Assets:     assets.AssetMix{Renewables: 1, FossilsWholesale: 1, FossilsCapacity: 1, BatteriesArbitrage: 1, BatteriesCapacity: 1},
 			},
 			{
 				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      100, // Can buy
-				Assets:     nil,
+				Assets:     assets.AssetMix{},
 			},
 			{
 				Status:     core.PlayerStatusActive,
 				isBuilding: false, // Finished, no actions
 				Money:      100,
-				Assets:     makeAssets(assets.AssetMix{Renewables: 1, FossilsWholesale: 1}),
+				Assets:     assets.AssetMix{Renewables: 1, FossilsWholesale: 1},
 			},
 			{
 				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      40, // Can scrap
-				Assets:     makeAssets(assets.AssetMix{Renewables: 1}),
+				Assets:     assets.AssetMix{Renewables: 1},
 			},
 		},
 		Params:       params.BuilderFrom(params.Default).RenewableCosts(50, 40).FossilCosts(50, 40).BatteryCosts(50, 40).Build(),
-		TakeoverPool: nil,
+		TakeoverPool: assets.AssetMix{},
 	}
 	got := gameState.possibleActions()
 	want := []PlayerAction{
@@ -413,11 +390,11 @@ func Test_GameState_applyPlayerAction_Impossible(t *testing.T) {
 				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      10,
-				Assets:     nil,
+				Assets:     assets.AssetMix{},
 			},
 		},
 		Params:       params.BuilderFrom(params.Default).RenewableCosts(50, 40).FossilCosts(50, 40).BatteryCosts(50, 40).Build(),
-		TakeoverPool: nil,
+		TakeoverPool: assets.AssetMix{},
 	}
 	err := gameState.applyPlayerAction(PlayerAction{
 		Type:        ActionTypeBuildAsset,
@@ -437,11 +414,11 @@ func Test_GameState_applyPlayerAction_Finished(t *testing.T) {
 				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      10,
-				Assets:     nil,
+				Assets:     assets.AssetMix{},
 			},
 		},
 		Params:       params.Default,
-		TakeoverPool: nil,
+		TakeoverPool: assets.AssetMix{},
 	}
 	action := PlayerAction{
 		Type:        ActionTypeFinished,
@@ -465,11 +442,11 @@ func Test_GameState_applyPlayerAction_Build(t *testing.T) {
 				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      60,
-				Assets:     nil,
+				Assets:     assets.AssetMix{},
 			},
 		},
 		Params:       params.BuilderFrom(params.Default).BatteryCosts(50, 40).Build(),
-		TakeoverPool: nil,
+		TakeoverPool: assets.AssetMix{},
 	}
 	action := PlayerAction{
 		Type:        ActionTypeBuildAsset,
@@ -488,7 +465,7 @@ func Test_GameState_applyPlayerAction_Build(t *testing.T) {
 	if gotMoney != wantMoney {
 		t.Errorf("Money = %d, want %d after %s action", gotMoney, wantMoney, action.Type.String())
 	}
-	gotMix := gameState.Players[0].getAssetMix()
+	gotMix := gameState.Players[0].Assets
 	wantMix := assets.AssetMix{BatteriesArbitrage: 1}
 	if gotMix != wantMix {
 		t.Errorf("AssetMix = %+v, want %+v after %s action", gotMix, wantMix, action.Type.String())
@@ -502,11 +479,11 @@ func Test_GameState_applyPlayerAction_Scrap(t *testing.T) {
 				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      60,
-				Assets:     makeAssets(assets.AssetMix{BatteriesCapacity: 1, FossilsWholesale: 1}),
+				Assets:     assets.AssetMix{BatteriesCapacity: 1, FossilsWholesale: 1},
 			},
 		},
 		Params:       params.BuilderFrom(params.Default).BatteryCosts(50, 40).Build(),
-		TakeoverPool: nil,
+		TakeoverPool: assets.AssetMix{},
 	}
 	action := PlayerAction{
 		Type:        ActionTypeScrapAsset,
@@ -539,11 +516,11 @@ func Test_GameState_applyPlayerAction_Takeover(t *testing.T) {
 				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      60,
-				Assets:     nil,
+				Assets:     assets.AssetMix{},
 			},
 		},
 		Params:       params.BuilderFrom(params.Default).BatteryCosts(50, 40).Build(),
-		TakeoverPool: makeAssets(assets.AssetMix{BatteriesCapacity: 1, FossilsWholesale: 1}),
+		TakeoverPool: assets.AssetMix{BatteriesCapacity: 1, FossilsWholesale: 1},
 	}
 	action := PlayerAction{
 		Type:        ActionTypeTakeoverAsset,
@@ -567,7 +544,7 @@ func Test_GameState_applyPlayerAction_Takeover(t *testing.T) {
 	if gotMix != wantMix {
 		t.Errorf("Player AssetMix = %+v, want %+v after %s action", gotMix, wantMix, action.Type.String())
 	}
-	gotMix = assets.AssetMixFrom(slices.Values(gameState.TakeoverPool))
+	gotMix = gameState.TakeoverPool
 	wantMix = assets.AssetMix{FossilsWholesale: 1}
 	if gotMix != wantMix {
 		t.Errorf("Takeover AssetMix = %+v, want %+v after %s action", gotMix, wantMix, action.Type.String())
@@ -581,11 +558,11 @@ func Test_GameState_applyPlayerAction_TakeoverScrap(t *testing.T) {
 				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      60,
-				Assets:     nil,
+				Assets:     assets.AssetMix{},
 			},
 		},
 		Params:       params.BuilderFrom(params.Default).FossilCosts(50, 40).Build(),
-		TakeoverPool: makeAssets(assets.AssetMix{BatteriesCapacity: 1, FossilsWholesale: 2}),
+		TakeoverPool: assets.AssetMix{BatteriesCapacity: 1, FossilsWholesale: 2},
 	}
 	action := PlayerAction{
 		Type:        ActionTypeTakeoverScrapAsset,
@@ -604,10 +581,10 @@ func Test_GameState_applyPlayerAction_TakeoverScrap(t *testing.T) {
 	if gotMoney != wantMoney {
 		t.Errorf("Money = %d, want %d after %s action", gotMoney, wantMoney, action.Type.String())
 	}
-	if len(gameState.Players[0].Assets) != 0 {
-		t.Errorf("Player had %d assets, want 0 after %s action", len(gameState.Players[0].Assets), action.Type.String())
+	if gameState.Players[0].Assets.NumAssets() != 0 {
+		t.Errorf("Player had %d assets, want 0 after %s action", gameState.Players[0].Assets.NumAssets(), action.Type.String())
 	}
-	gotMix := assets.AssetMixFrom(slices.Values(gameState.TakeoverPool))
+	gotMix := gameState.TakeoverPool
 	wantMix := assets.AssetMix{BatteriesCapacity: 1, FossilsWholesale: 1}
 	if gotMix != wantMix {
 		t.Errorf("Takeover AssetMix = %+v, want %+v after %s action", gotMix, wantMix, action.Type.String())
@@ -621,11 +598,11 @@ func Test_GameState_applyPlayerAction_Pledge(t *testing.T) {
 				Status:     core.PlayerStatusActive,
 				isBuilding: true,
 				Money:      60,
-				Assets:     makeAssets(assets.AssetMix{BatteriesCapacity: 1, BatteriesArbitrage: 2}),
+				Assets:     assets.AssetMix{BatteriesCapacity: 1, BatteriesArbitrage: 2},
 			},
 		},
 		Params:       params.Default,
-		TakeoverPool: nil,
+		TakeoverPool: assets.AssetMix{},
 	}
 	action := PlayerAction{
 		Type:        ActionTypePledgeCapacity,

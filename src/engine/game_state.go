@@ -18,17 +18,13 @@ type PlayerState struct {
 	Status core.PlayerStatus  // Whether the player has lost
 	Reason core.LossCondition // Reason for player loss, if applicable
 	Money  int                // Player's current money
-	Assets []assets.Asset     // Player's owned assets
+	Assets assets.AssetMix    // Player's owned assets
 
 	isBuilding bool // Internal tracker of whether the player has finished the build round
 }
 
 func (ps PlayerState) getAssetMix() assets.AssetMix {
-	var am assets.AssetMix
-	for _, a := range ps.Assets {
-		am.AddAsset(a)
-	}
-	return am
+	return ps.Assets
 }
 
 type playerStateJSON struct {
@@ -42,7 +38,7 @@ func (ps PlayerState) MarshalJSON() ([]byte, error) {
 	var psj = playerStateJSON{
 		Status: ps.Status.String(),
 		Money:  ps.Money,
-		Assets: ps.getAssetMix(),
+		Assets: ps.Assets,
 	}
 	if ps.Status != core.PlayerStatusActive {
 		psj.Reason = ps.Reason.String()
@@ -52,19 +48,12 @@ func (ps PlayerState) MarshalJSON() ([]byte, error) {
 
 // Returns whether the player owns any fossil assets
 func (ps PlayerState) HasFossilAssets() bool {
-	for _, a := range ps.Assets {
-		if a.Type() == assets.TypeFossil {
-			return true
-		}
-	}
-	return false
+	return ps.Assets.AssetsOfType(assets.TypeFossil) > 0
 }
 
 // Resets all of the player's assets to their default operating mode
 func (ps *PlayerState) resetAllAssets() {
-	for _, a := range ps.Assets {
-		a.ClearMode()
-	}
+	ps.Assets.ResetAllCapacityPledges()
 }
 
 // SetLossWithReason sets status and reason for loss. Caller is responsible for logging, handling asset takeover, etc.
@@ -86,7 +75,7 @@ type GameState struct {
 	Round           int
 	CarbonEmissions int // Total carbon emissions in the world
 	Players         []PlayerState
-	TakeoverPool    []assets.Asset // Assets available for takeover
+	TakeoverPool    assets.AssetMix // Assets available for takeover
 
 	LastSnapshot Snapshot // Summary of the previous round's Operate phase
 
@@ -99,29 +88,13 @@ type GameState struct {
 	pcg randv2.PCG
 }
 
-// allAssets iterates over assets in player portfolios and in the takeover pool
-func (gs GameState) allAssets() iter.Seq[assets.Asset] {
-	return func(yield func(assets.Asset) bool) {
-		for pi := range gs.Players {
-			for ai := range gs.Players[pi].Assets {
-				if !yield(gs.Players[pi].Assets[ai]) {
-					return
-				}
-			}
-		}
-		for ai := range gs.TakeoverPool {
-			if !yield(gs.TakeoverPool[ai]) {
-				return
-			}
-		}
-	}
-}
-
+// getAssetMix returns the total asset mix of all active players and the takeover pool
 func (gs GameState) getAssetMix() assets.AssetMix {
 	var am assets.AssetMix
-	for a := range gs.allAssets() {
-		am.AddAsset(a)
+	for _, p := range gs.Players {
+		am.Add(p.Assets)
 	}
+	am.Add(gs.TakeoverPool)
 	return am
 }
 
@@ -146,8 +119,7 @@ func (gs *GameState) SetGlobalLossWithReason(reason core.LossCondition) {
 
 // Moves all assets from the specified player to the takeover pool.
 func (gs *GameState) movePlayerAssetsToTakeoverPool(pi int) {
-	gs.TakeoverPool = append(gs.TakeoverPool, gs.Players[pi].Assets...)
-	gs.Players[pi].Assets = nil
+	gs.TakeoverPool.TakeAllAssetsFrom(&(gs.Players[pi].Assets))
 }
 
 // SetRNGSeed seeds the operate-phase PCG RNG.
@@ -177,9 +149,7 @@ func NewGame(numPlayers int, gameParams params.Params, logger eventlog.Logger, g
 		p := PlayerState{
 			Money:  gameParams.InitialCash,
 			Status: core.PlayerStatusActive,
-		}
-		for range initialAssetsPerPlayer {
-			p.Assets = append(p.Assets, assets.New(assets.TypeFossil))
+			Assets: assets.AssetMix{FossilsWholesale: initialAssetsPerPlayer},
 		}
 		game.Players = append(game.Players, p)
 	}

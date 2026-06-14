@@ -81,12 +81,11 @@ func BuildPhase(gs *GameState) StateRunner {
 			if gs.Params.TakeoverRule == params.TakeoverRuleForcedTakeover {
 				// game loss, assets in takeover pool that nobody can afford to take over
 				gs.SetGlobalLossWithReason(core.LossConditionUnownedTakeoverAssets)
-				takeoverMix := assets.AssetMixFrom(slices.Values(gs.TakeoverPool))
 				var money []int
 				for _, p := range gs.Players {
 					money = append(money, p.Money)
 				}
-				logger.Event().With(GameLogEventEveryoneLoses, gs.Reason).WithKey("takeover_pool", takeoverMix).WithKey("player_funds", money).Log()
+				logger.Event().With(GameLogEventEveryoneLoses, gs.Reason).WithKey("takeover_pool", gs.TakeoverPool).WithKey("player_funds", money).Log()
 			} else {
 				gs.SetGlobalLossWithReason(core.LossConditionNoActivePlayers) // Should never happen, but if it does, force a game loss
 				logger.Event().With(GameLogEventEveryoneLoses, gs.Reason).Log()
@@ -117,16 +116,14 @@ func (gs *GameState) possibleActions() []PlayerAction {
 		if !p.isBuilding {
 			continue
 		}
-		playerAssetMix := p.getAssetMix()
-		takeoverAssetMix := assets.AssetMixFrom(slices.Values(gs.TakeoverPool))
 		for _, at := range assets.Types {
 			if cost := gs.Params.BuildCost(at); cost <= p.Money {
 				actions = append(actions, PlayerAction{Type: ActionTypeBuildAsset, PlayerIndex: pi, AssetType: at, Cost: cost})
 			}
-			if cost := gs.Params.ScrapCost(at); cost <= p.Money && playerAssetMix.AssetsOfType(at) > 0 {
+			if cost := gs.Params.ScrapCost(at); cost <= p.Money && p.Assets.AssetsOfType(at) > 0 {
 				actions = append(actions, PlayerAction{Type: ActionTypeScrapAsset, PlayerIndex: pi, AssetType: at, Cost: cost})
 			}
-			if cost := gs.Params.TakeoverCost(at); cost <= p.Money && takeoverAssetMix.AssetsOfType(at) > 0 {
+			if cost := gs.Params.TakeoverCost(at); cost <= p.Money && gs.TakeoverPool.AssetsOfType(at) > 0 {
 				actions = append(
 					actions,
 					PlayerAction{Type: ActionTypeTakeoverAsset, PlayerIndex: pi, AssetType: at, Cost: cost},
@@ -135,10 +132,10 @@ func (gs *GameState) possibleActions() []PlayerAction {
 			}
 		}
 		if gs.Params.CapacityRule != params.CapacityRuleNoCapacityMarket {
-			if playerAssetMix.BatteriesArbitrage > 0 {
+			if p.Assets.BatteriesArbitrage > 0 {
 				actions = append(actions, PlayerAction{Type: ActionTypePledgeCapacity, PlayerIndex: pi, AssetType: assets.TypeBattery})
 			}
-			if playerAssetMix.FossilsWholesale > 0 {
+			if p.Assets.FossilsWholesale > 0 {
 				actions = append(actions, PlayerAction{Type: ActionTypePledgeCapacity, PlayerIndex: pi, AssetType: assets.TypeFossil})
 			}
 		}
@@ -146,7 +143,7 @@ func (gs *GameState) possibleActions() []PlayerAction {
 		case params.TakeoverRuleVirtualOwner:
 			actions = append(actions, PlayerAction{Type: ActionTypeFinished, PlayerIndex: pi})
 		case params.TakeoverRuleForcedTakeover:
-			if takeoverAssetMix.NumAssets() == 0 {
+			if gs.TakeoverPool.NumAssets() == 0 {
 				actions = append(actions, PlayerAction{Type: ActionTypeFinished, PlayerIndex: pi})
 			}
 		}
@@ -161,39 +158,25 @@ func (gs *GameState) applyPlayerAction(pa PlayerAction) error {
 	}
 
 	var player *PlayerState = &(gs.Players[pa.PlayerIndex])
-	firstAssetOfActionType := func(a assets.Asset) bool { return a.Type() == pa.AssetType }
 	switch pa.Type {
 	case ActionTypeFinished:
 		player.isBuilding = false
 	case ActionTypeBuildAsset:
-		player.Assets = append(player.Assets, assets.New(pa.AssetType))
+		player.Assets.AddOneAsset(pa.AssetType)
 	case ActionTypeScrapAsset:
-		ai := slices.IndexFunc(player.Assets, firstAssetOfActionType)
-		if ai == -1 {
+		if player.Assets.AssetsOfType(pa.AssetType) == 0 {
 			return fmt.Errorf("PlayerIndex %d has no assets of type %s to scrap", pa.PlayerIndex, pa.AssetType.String())
 		}
-		player.Assets = slices.Delete(player.Assets, ai, ai+1)
+		player.Assets.RemoveOneAsset(pa.AssetType)
 	case ActionTypeTakeoverAsset:
-		ai := slices.IndexFunc(gs.TakeoverPool, firstAssetOfActionType)
-		if ai == -1 {
-			return fmt.Errorf("takeover pool has no assets of type %s", pa.AssetType.String())
-		}
-		gs.TakeoverPool = slices.Delete(gs.TakeoverPool, ai, ai+1)
-		player.Assets = append(player.Assets, assets.New(pa.AssetType))
+		player.Assets.TakeOneAssetFrom(pa.AssetType, &gs.TakeoverPool)
 	case ActionTypeTakeoverScrapAsset:
-		ai := slices.IndexFunc(gs.TakeoverPool, firstAssetOfActionType)
-		if ai == -1 {
-			return fmt.Errorf("takeover pool has no assets of type %s", pa.AssetType.String())
-		}
-		gs.TakeoverPool = slices.Delete(gs.TakeoverPool, ai, ai+1)
+		gs.TakeoverPool.RemoveOneAsset(pa.AssetType)
 	case ActionTypePledgeCapacity:
-		ai := slices.IndexFunc(player.Assets, func(a assets.Asset) bool {
-			return a.Type() == pa.AssetType && (a.Mode()&assets.OperationModeCapacity == 0)
-		})
-		if ai == -1 {
+		if !player.Assets.CanPledgeOneAsset(pa.AssetType) {
 			return fmt.Errorf("PlayerIndex %d has no assets of type %s to pledge", pa.PlayerIndex, pa.AssetType.String())
 		}
-		player.Assets[ai].SetMode(assets.OperationModeCapacity)
+		player.Assets.PledgeOneAsset(pa.AssetType)
 	}
 	player.Money -= pa.Cost
 	return nil

@@ -89,10 +89,6 @@ type gameResponse struct {
 // Returns the client-observable game state. Blocks on receive from possibleActions
 func (g *game) getState() gameResponse {
 	actions := <-g.possibleActions
-	var tam assets.AssetMix
-	for _, ta := range g.game.TakeoverPool {
-		tam.AddAsset(ta)
-	}
 	return gameResponse{
 		ID: g.id,
 		Game: stateResponse{
@@ -102,7 +98,7 @@ func (g *game) getState() gameResponse {
 			EmissionsCounter:  g.game.CarbonEmissions,
 			Players:           g.game.Players,
 			LastRoundSnapshot: g.game.LastSnapshot,
-			TakeoverPool:      tam,
+			TakeoverPool:      g.game.TakeoverPool,
 		},
 		PossibleActions: actions,
 	}

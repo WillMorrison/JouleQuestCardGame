@@ -89,8 +89,8 @@ func TestGameState_winConditionMet(t *testing.T) {
 			game: GameState{
 				Params: params.BuilderFrom(params.Default).WinConditionRule(params.WinConditionRuleLastFossilLoses, 0).Build(),
 				Players: []PlayerState{
-					{Status: core.PlayerStatusActive, Assets: []assets.Asset{assets.New(assets.TypeFossil)}},
-					{Status: core.PlayerStatusActive, Assets: []assets.Asset{assets.New(assets.TypeFossil)}},
+					{Status: core.PlayerStatusActive, Assets: assets.AssetMix{FossilsWholesale: 1}},
+					{Status: core.PlayerStatusActive, Assets: assets.AssetMix{FossilsWholesale: 1}},
 				},
 			},
 		},
@@ -100,10 +100,10 @@ func TestGameState_winConditionMet(t *testing.T) {
 			game: GameState{
 				Params: params.BuilderFrom(params.Default).WinConditionRule(params.WinConditionRuleLastFossilLoses, 0).Build(),
 				Players: []PlayerState{
-					{Status: core.PlayerStatusActive, Assets: []assets.Asset{assets.New(assets.TypeRenewable)}},
-					{Status: core.PlayerStatusActive, Assets: []assets.Asset{assets.New(assets.TypeFossil)}},
+					{Status: core.PlayerStatusActive, Assets: assets.AssetMix{Renewables: 1}},
+					{Status: core.PlayerStatusActive, Assets: assets.AssetMix{FossilsWholesale: 1}},
 				},
-				TakeoverPool: []assets.Asset{assets.New(assets.TypeFossil)},
+				TakeoverPool: assets.AssetMix{FossilsWholesale: 1},
 			},
 		},
 		{
@@ -112,10 +112,10 @@ func TestGameState_winConditionMet(t *testing.T) {
 			game: GameState{
 				Params: params.BuilderFrom(params.Default).WinConditionRule(params.WinConditionRuleLastFossilLoses, 0).Build(),
 				Players: []PlayerState{
-					{Status: core.PlayerStatusActive, Assets: []assets.Asset{assets.New(assets.TypeRenewable)}},
-					{Status: core.PlayerStatusActive, Assets: []assets.Asset{assets.New(assets.TypeRenewable)}},
+					{Status: core.PlayerStatusActive, Assets: assets.AssetMix{Renewables: 1}},
+					{Status: core.PlayerStatusActive, Assets: assets.AssetMix{Renewables: 1}},
 				},
-				TakeoverPool: []assets.Asset{assets.New(assets.TypeFossil)},
+				TakeoverPool: assets.AssetMix{FossilsWholesale: 1},
 			},
 		},
 		{
@@ -124,8 +124,8 @@ func TestGameState_winConditionMet(t *testing.T) {
 			game: GameState{
 				Params: params.BuilderFrom(params.Default).WinConditionRule(params.WinConditionRuleLastFossilLoses, 0).Build(),
 				Players: []PlayerState{
-					{Status: core.PlayerStatusActive, Assets: []assets.Asset{assets.New(assets.TypeFossil)}},
-					{Status: core.PlayerStatusActive, Assets: []assets.Asset{assets.New(assets.TypeRenewable)}},
+					{Status: core.PlayerStatusActive, Assets: assets.AssetMix{FossilsWholesale: 1}},
+					{Status: core.PlayerStatusActive, Assets: assets.AssetMix{Renewables: 1}},
 				},
 			},
 		},
@@ -135,10 +135,9 @@ func TestGameState_winConditionMet(t *testing.T) {
 			game: GameState{
 				Params: params.BuilderFrom(params.Default).WinConditionRule(params.WinConditionRuleLastFossilLoses, 0).Build(),
 				Players: []PlayerState{
-					{Status: core.PlayerStatusActive, Assets: []assets.Asset{assets.New(assets.TypeBattery)}},
-					{Status: core.PlayerStatusActive, Assets: []assets.Asset{assets.New(assets.TypeRenewable)}},
+					{Status: core.PlayerStatusActive, Assets: assets.AssetMix{BatteriesArbitrage: 1}},
+					{Status: core.PlayerStatusActive, Assets: assets.AssetMix{Renewables: 1}},
 				},
-				TakeoverPool: nil,
 			},
 		},
 		{
@@ -147,10 +146,10 @@ func TestGameState_winConditionMet(t *testing.T) {
 			game: GameState{
 				Params: params.BuilderFrom(params.Default).WinConditionRule(params.WinConditionRuleLastFossilLoses, 0).Build(),
 				Players: []PlayerState{
-					{Status: core.PlayerStatusActive, Assets: []assets.Asset{assets.New(assets.TypeRenewable)}},
-					{Status: core.PlayerStatusActive, Assets: []assets.Asset{assets.New(assets.TypeRenewable)}},
+					{Status: core.PlayerStatusActive, Assets: assets.AssetMix{Renewables: 1}},
+					{Status: core.PlayerStatusActive, Assets: assets.AssetMix{Renewables: 1}},
 				},
-				TakeoverPool: []assets.Asset{assets.New(assets.TypeBattery)},
+				TakeoverPool: assets.AssetMix{BatteriesArbitrage: 1},
 			},
 		},
 	}
@@ -177,8 +176,8 @@ func TestGameState_OperatePhase(t *testing.T) {
 				Params:          params.BuilderFrom(params.Default).EmissionsCap(100).Build(),
 				CarbonEmissions: 99,
 				Players: []PlayerState{
-					{Status: core.PlayerStatusActive, Assets: makeAssets(assets.AssetMix{FossilsWholesale: 20})},
-					{Status: core.PlayerStatusActive, Assets: makeAssets(assets.AssetMix{FossilsWholesale: 20})},
+					{Status: core.PlayerStatusActive, Assets: assets.AssetMix{FossilsWholesale: 20}},
+					{Status: core.PlayerStatusActive, Assets: assets.AssetMix{FossilsWholesale: 20}},
 				},
 			},
 			wantStatus: core.GameStatusLoss,
@@ -189,8 +188,8 @@ func TestGameState_OperatePhase(t *testing.T) {
 			game: GameState{
 				Params: params.BuilderFrom(params.Default).GenerationConstraint(params.GenerationConstraintRuleMinimum, 15).Build(),
 				Players: []PlayerState{
-					{Status: core.PlayerStatusActive, Assets: makeAssets(assets.AssetMix{Renewables: 5, FossilsCapacity: 2})},
-					{Status: core.PlayerStatusActive, Assets: makeAssets(assets.AssetMix{FossilsWholesale: 5, BatteriesArbitrage: 10})},
+					{Status: core.PlayerStatusActive, Assets: assets.AssetMix{Renewables: 5, FossilsCapacity: 2}},
+					{Status: core.PlayerStatusActive, Assets: assets.AssetMix{FossilsWholesale: 5, BatteriesArbitrage: 10}},
 				},
 			},
 			wantStatus: core.GameStatusLoss,
@@ -203,9 +202,9 @@ func TestGameState_OperatePhase(t *testing.T) {
 					PnL(core.PnLTable{}, core.PnLTable{}, core.PnLTable{-50, -50, -50, -50}). // Renewables will lose money
 					Build(),
 				Players: []PlayerState{
-					{Status: core.PlayerStatusActive, Money: 0, Assets: makeAssets(assets.AssetMix{Renewables: 5, FossilsWholesale: 2})},
-					{Status: core.PlayerStatusActive, Money: 0, Assets: makeAssets(assets.AssetMix{FossilsWholesale: 5, BatteriesArbitrage: 10})},
-					{Status: core.PlayerStatusActive, Money: 0, Assets: makeAssets(assets.AssetMix{FossilsWholesale: 8, BatteriesArbitrage: 10})},
+					{Status: core.PlayerStatusActive, Money: 0, Assets: assets.AssetMix{Renewables: 5, FossilsWholesale: 2}},
+					{Status: core.PlayerStatusActive, Money: 0, Assets: assets.AssetMix{FossilsWholesale: 5, BatteriesArbitrage: 10}},
+					{Status: core.PlayerStatusActive, Money: 0, Assets: assets.AssetMix{FossilsWholesale: 8, BatteriesArbitrage: 10}},
 				},
 			},
 			wantStatus: core.GameStatusOngoing,
@@ -217,9 +216,9 @@ func TestGameState_OperatePhase(t *testing.T) {
 					PnL(core.PnLTable{}, core.PnLTable{}, core.PnLTable{-50, -50, -50, -50}). // Renewables will lose money
 					Build(),
 				Players: []PlayerState{
-					{Status: core.PlayerStatusActive, Money: 0, Assets: makeAssets(assets.AssetMix{Renewables: 5, FossilsWholesale: 2})},
-					{Status: core.PlayerStatusActive, Money: 0, Assets: makeAssets(assets.AssetMix{Renewables: 5, BatteriesArbitrage: 10})},
-					{Status: core.PlayerStatusActive, Money: 0, Assets: makeAssets(assets.AssetMix{Renewables: 8, BatteriesArbitrage: 10})},
+					{Status: core.PlayerStatusActive, Money: 0, Assets: assets.AssetMix{Renewables: 5, FossilsWholesale: 2}},
+					{Status: core.PlayerStatusActive, Money: 0, Assets: assets.AssetMix{Renewables: 5, BatteriesArbitrage: 10}},
+					{Status: core.PlayerStatusActive, Money: 0, Assets: assets.AssetMix{Renewables: 8, BatteriesArbitrage: 10}},
 				},
 			},
 			wantStatus: core.GameStatusLoss,
@@ -230,8 +229,8 @@ func TestGameState_OperatePhase(t *testing.T) {
 			game: GameState{
 				Params: params.Default,
 				Players: []PlayerState{
-					{Status: core.PlayerStatusActive, Money: 0, Assets: makeAssets(assets.AssetMix{Renewables: 5, BatteriesArbitrage: 2})},
-					{Status: core.PlayerStatusActive, Money: 0, Assets: makeAssets(assets.AssetMix{FossilsWholesale: 10, BatteriesArbitrage: 10})},
+					{Status: core.PlayerStatusActive, Money: 0, Assets: assets.AssetMix{Renewables: 5, BatteriesArbitrage: 2}},
+					{Status: core.PlayerStatusActive, Money: 0, Assets: assets.AssetMix{FossilsWholesale: 10, BatteriesArbitrage: 10}},
 				},
 			},
 			wantStatus: core.GameStatusWin,
@@ -243,8 +242,8 @@ func TestGameState_OperatePhase(t *testing.T) {
 					PnL(core.PnLTable{}, core.PnLTable{}, core.PnLTable{-50, -50, -50, -50}). // Renewables will lose money
 					Build(),
 				Players: []PlayerState{
-					{Status: core.PlayerStatusActive, Money: 0, Assets: makeAssets(assets.AssetMix{Renewables: 5, FossilsWholesale: 2})},
-					{Status: core.PlayerStatusActive, Money: 0, Assets: makeAssets(assets.AssetMix{FossilsWholesale: 10, BatteriesArbitrage: 10})},
+					{Status: core.PlayerStatusActive, Money: 0, Assets: assets.AssetMix{Renewables: 5, FossilsWholesale: 2}},
+					{Status: core.PlayerStatusActive, Money: 0, Assets: assets.AssetMix{FossilsWholesale: 10, BatteriesArbitrage: 10}},
 				},
 			},
 			wantStatus: core.GameStatusLoss,
@@ -257,9 +256,9 @@ func TestGameState_OperatePhase(t *testing.T) {
 					PnL(core.PnLTable{}, core.PnLTable{-50, -50, -50, -50}, core.PnLTable{}). // Fossils will lose money
 					Build(),
 				Players: []PlayerState{
-					{Status: core.PlayerStatusActive, Money: 0, Assets: makeAssets(assets.AssetMix{Renewables: 10, BatteriesArbitrage: 10})},
-					{Status: core.PlayerStatusActive, Money: 0, Assets: makeAssets(assets.AssetMix{FossilsWholesale: 10, Renewables: 10})},
-					{Status: core.PlayerStatusActive, Money: 0, Assets: makeAssets(assets.AssetMix{FossilsWholesale: 10, BatteriesArbitrage: 10})},
+					{Status: core.PlayerStatusActive, Money: 0, Assets: assets.AssetMix{Renewables: 10, BatteriesArbitrage: 10}},
+					{Status: core.PlayerStatusActive, Money: 0, Assets: assets.AssetMix{FossilsWholesale: 10, Renewables: 10}},
+					{Status: core.PlayerStatusActive, Money: 0, Assets: assets.AssetMix{FossilsWholesale: 10, BatteriesArbitrage: 10}},
 				},
 			},
 			wantStatus: core.GameStatusWin,

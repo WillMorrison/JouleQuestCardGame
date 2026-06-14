@@ -94,9 +94,7 @@ func checkParity(t *testing.T, step int, pgs *engine.ProceduralGameState, cg *ga
 		if i < len(legacyGame.Players) {
 			legacyStatus = legacyGame.Players[i].Status
 			legacyMoney = legacyGame.Players[i].Money
-			for _, a := range legacyGame.Players[i].Assets {
-				legacyMix.AddAsset(a)
-			}
+			legacyMix = legacyGame.Players[i].Assets
 		} else {
 			legacyStatus = core.PlayerStatusLost
 		}
@@ -131,12 +129,8 @@ func checkParity(t *testing.T, step int, pgs *engine.ProceduralGameState, cg *ga
 	}
 
 	// Takeover pool mix
-	var legacyTakeover assets.AssetMix
-	for _, a := range legacyGame.TakeoverPool {
-		legacyTakeover.AddAsset(a)
-	}
-	if legacyTakeover != cg.TakeoverPoolMix() {
-		t.Errorf("step %d: TakeoverPoolMix mismatch: legacy=%+v, compact=%+v", step, legacyTakeover, cg.TakeoverPoolMix())
+	if legacyGame.TakeoverPool != cg.TakeoverPoolMix() {
+		t.Errorf("step %d: TakeoverPoolMix mismatch: legacy=%+v, compact=%+v", step, legacyGame.TakeoverPool, cg.TakeoverPoolMix())
 	}
 }
 
