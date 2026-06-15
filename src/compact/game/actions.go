@@ -3,7 +3,7 @@ package game
 import (
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
 	"github.com/WillMorrison/JouleQuestCardGame/core"
-	legacy "github.com/WillMorrison/JouleQuestCardGame/params"
+	"github.com/WillMorrison/JouleQuestCardGame/params"
 )
 
 // Action code layout matches rl_agent/custom_environment/env/joulequest_env.py PlayerActionToInt.
@@ -106,7 +106,7 @@ func (g *Game) possibleActionMask(pi int) uint32 {
 		mask |= 1 << ActionTakeoverFossil
 		mask |= 1 << ActionTakeoverScrapFossil
 	}
-	if g.Params.CapacityRule != legacy.CapacityRuleNoCapacityMarket {
+	if g.Params.CapacityRule != params.CapacityRuleNoCapacityMarket {
 		if p.Mix.BatteriesArbitrage > 0 {
 			mask |= 1 << ActionPledgeBattery
 		}
@@ -115,9 +115,9 @@ func (g *Game) possibleActionMask(pi int) uint32 {
 		}
 	}
 	switch g.Params.TakeoverRule {
-	case legacy.TakeoverRuleVirtualOwner:
+	case params.TakeoverRuleVirtualOwner:
 		mask |= 1 << ActionFinished
-	case legacy.TakeoverRuleForcedTakeover:
+	case params.TakeoverRuleForcedTakeover:
 		if g.TakeoverPool.NumAssets() == 0 {
 			mask |= 1 << ActionFinished
 		}

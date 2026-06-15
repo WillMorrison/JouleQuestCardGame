@@ -10,7 +10,7 @@ import (
 	"github.com/WillMorrison/JouleQuestCardGame/core"
 	"github.com/WillMorrison/JouleQuestCardGame/engine"
 	"github.com/WillMorrison/JouleQuestCardGame/eventlog"
-	legacy "github.com/WillMorrison/JouleQuestCardGame/params"
+	"github.com/WillMorrison/JouleQuestCardGame/params"
 )
 
 type actionStep struct {
@@ -18,7 +18,7 @@ type actionStep struct {
 	actionCode  int32
 }
 
-func actionCodeToLegacy(pi int, actionCode int32, p legacy.Params) engine.PlayerAction {
+func actionCodeToLegacy(pi int, actionCode int32, p params.Params) engine.PlayerAction {
 	switch actionCode {
 	case game.ActionBuildRenewable:
 		return engine.PlayerAction{Type: engine.ActionTypeBuildAsset, PlayerIndex: pi, AssetType: assets.TypeRenewable, Cost: p.BuildCost(assets.TypeRenewable)}
@@ -134,7 +134,7 @@ func checkParity(t *testing.T, step int, pgs *engine.ProceduralGameState, cg *ga
 	}
 }
 
-func runParityScenario(t *testing.T, numPlayers int, legacyParams legacy.Params, seed uint64, steps []actionStep) {
+func runParityScenario(t *testing.T, numPlayers int, legacyParams params.Params, seed uint64, steps []actionStep) {
 	t.Helper()
 	compactParams, err := cparams.FromLegacy(legacyParams)
 	if err != nil {
@@ -172,15 +172,15 @@ func runParityScenario(t *testing.T, numPlayers int, legacyParams legacy.Params,
 }
 
 func TestParity_Minimal(t *testing.T) {
-	runParityScenario(t, 2, legacy.Default, 42, []actionStep{
+	runParityScenario(t, 2, params.Default, 42, []actionStep{
 		{0, game.ActionFinished},
 		{1, game.ActionFinished},
 	})
 }
 
 func TestParity_BuildScrapPledge(t *testing.T) {
-	b := legacy.BuilderFrom(legacy.Default)
-	b.TakeoverRule(legacy.TakeoverRuleVirtualOwner)
+	b := params.BuilderFrom(params.Default)
+	b.TakeoverRule(params.TakeoverRuleVirtualOwner)
 	b.InitialCash(100)
 
 	runParityScenario(t, 2, b.Build(), 100, []actionStep{
@@ -193,8 +193,8 @@ func TestParity_BuildScrapPledge(t *testing.T) {
 }
 
 func TestParity_TakeoverForcedRule(t *testing.T) {
-	b := legacy.BuilderFrom(legacy.Default)
-	b.TakeoverRule(legacy.TakeoverRuleForcedTakeover)
+	b := params.BuilderFrom(params.Default)
+	b.TakeoverRule(params.TakeoverRuleForcedTakeover)
 	b.InitialCash(0) // forced bankruptcy
 
 	runParityScenario(t, 2, b.Build(), 42, []actionStep{
@@ -205,10 +205,10 @@ func TestParity_TakeoverForcedRule(t *testing.T) {
 }
 
 func TestParity_OperateOutcomes(t *testing.T) {
-	b := legacy.BuilderFrom(legacy.Default)
+	b := params.BuilderFrom(params.Default)
 	b.EmissionsCap(5)
-	b.CarbonTax(legacy.CarbonTaxRuleApplyCarbonTax, 2, 50)
-	b.WinConditionRule(legacy.WinConditionRuleLastFossilLoses, 0)
+	b.CarbonTax(params.CarbonTaxRuleApplyCarbonTax, 2, 50)
+	b.WinConditionRule(params.WinConditionRuleLastFossilLoses, 0)
 	b.InitialCash(50)
 
 	runParityScenario(t, 2, b.Build(), 123, []actionStep{
@@ -222,8 +222,8 @@ func TestParity_Stress(t *testing.T) {
 		t.Skip("skipping stress test in short mode")
 	}
 
-	b := legacy.BuilderFrom(legacy.Default)
-	b.Capacity(legacy.CapacityRuleNoCapacityMarket, core.PnLTable{}, core.PnLTable{}, core.PnLTable{})
+	b := params.BuilderFrom(params.Default)
+	b.Capacity(params.CapacityRuleNoCapacityMarket, core.PnLTable{}, core.PnLTable{}, core.PnLTable{})
 	legacyParams := b.Build()
 	compactParams, _ := cparams.FromLegacy(legacyParams)
 

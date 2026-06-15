@@ -6,7 +6,7 @@ import (
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
 	"github.com/WillMorrison/JouleQuestCardGame/core"
-	legacy "github.com/WillMorrison/JouleQuestCardGame/params"
+	"github.com/WillMorrison/JouleQuestCardGame/params"
 )
 
 // MaxPlayers is the maximum number of players supported by the compact engine.
@@ -19,11 +19,11 @@ const defaultCost int32 = 1 << 30
 
 // CompactParams mirrors legacy params.Params with only fixed-size fields (no maps or slices).
 type CompactParams struct {
-	CapacityRule             legacy.CapacityRule
-	CarbonTaxRule            legacy.CarbonTaxRule
-	WinConditionRule         legacy.WinConditionRule
-	GenerationConstraintRule legacy.GenerationConstraintRule
-	TakeoverRule             legacy.TakeoverRule
+	CapacityRule             params.CapacityRule
+	CarbonTaxRule            params.CarbonTaxRule
+	WinConditionRule         params.WinConditionRule
+	GenerationConstraintRule params.GenerationConstraintRule
+	TakeoverRule             params.TakeoverRule
 
 	InitialCash int32
 	// StartingFossilAssetsPerPlayerCount is indexed by player count (1..MaxPlayerCount); index 0 unused.
@@ -55,7 +55,7 @@ func int32FromPnL(t core.PnLTable) [4]int32 {
 }
 
 // FromLegacy builds CompactParams from the canonical params package value.
-func FromLegacy(p legacy.Params) (CompactParams, error) {
+func FromLegacy(p params.Params) (CompactParams, error) {
 	var c CompactParams
 	c.CapacityRule = p.CapacityRule
 	c.CarbonTaxRule = p.CarbonTaxRule
@@ -153,7 +153,7 @@ func (c CompactParams) OperatePnLForPlayerMix(m assets.AssetMix, volIdx int32, g
 	}
 
 	tax := int32(0)
-	if c.CarbonTaxRule == legacy.CarbonTaxRuleApplyCarbonTax && globalEmissions > c.CarbonTaxThreshold {
+	if c.CarbonTaxRule == params.CarbonTaxRuleApplyCarbonTax && globalEmissions > c.CarbonTaxThreshold {
 		tax = c.CarbonTaxCost
 	}
 
@@ -162,11 +162,11 @@ func (c CompactParams) OperatePnLForPlayerMix(m assets.AssetMix, volIdx int32, g
 	sum += int32(m.BatteriesArbitrage) * c.BatteryArbitragePnL[v]
 
 	switch c.CapacityRule {
-	case legacy.CapacityRulePaymentPerAsset:
+	case params.CapacityRulePaymentPerAsset:
 		sum += int32(m.BatteriesCapacity) * c.BatteryCapacityPnL[v]
-	case legacy.CapacityRuleSharedCapacityPaymentPool:
+	case params.CapacityRuleSharedCapacityPaymentPool:
 		sum += int32(m.BatteriesCapacity) * (c.CapacityPoolPnL[v] / numCap)
-	case legacy.CapacityRuleNoCapacityMarket:
+	case params.CapacityRuleNoCapacityMarket:
 		if m.BatteriesCapacity > 0 {
 			sum += int32(m.BatteriesCapacity) * (-defaultCost)
 		}
@@ -175,11 +175,11 @@ func (c CompactParams) OperatePnLForPlayerMix(m assets.AssetMix, volIdx int32, g
 	sum += int32(m.FossilsWholesale) * (c.FossilWholesalePnL[v] - tax)
 
 	switch c.CapacityRule {
-	case legacy.CapacityRulePaymentPerAsset:
+	case params.CapacityRulePaymentPerAsset:
 		sum += int32(m.FossilsCapacity) * (c.FossilCapacityPnL[v] - tax)
-	case legacy.CapacityRuleSharedCapacityPaymentPool:
+	case params.CapacityRuleSharedCapacityPaymentPool:
 		sum += int32(m.FossilsCapacity) * (c.CapacityPoolPnL[v]/numCap - tax)
-	case legacy.CapacityRuleNoCapacityMarket:
+	case params.CapacityRuleNoCapacityMarket:
 		if m.FossilsCapacity > 0 {
 			sum += int32(m.FossilsCapacity) * (-defaultCost)
 		}

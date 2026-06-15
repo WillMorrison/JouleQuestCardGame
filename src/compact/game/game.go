@@ -7,7 +7,7 @@ import (
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
 	cparams "github.com/WillMorrison/JouleQuestCardGame/compact/params"
 	"github.com/WillMorrison/JouleQuestCardGame/core"
-	legacy "github.com/WillMorrison/JouleQuestCardGame/params"
+	"github.com/WillMorrison/JouleQuestCardGame/params"
 )
 
 // phase is internal to the compact procedural state machine (not exported to REST/WASM).
@@ -22,7 +22,7 @@ const (
 
 // Game is the compact procedural controller (build / operate loop) with fixed-size state.
 type Game struct {
-	Phase           phase
+	phase           phase
 	Status          core.GameStatus
 	Reason          core.LossCondition
 	round           int32
@@ -49,7 +49,7 @@ func NewGame(numPlayers int, p cparams.CompactParams) (*Game, error) {
 	g.Params = p
 	g.NumPlayers = numPlayers
 	g.Status = core.GameStatusOngoing
-	g.Phase = phaseGameStart
+	g.phase = phaseGameStart
 	for i := 0; i < numPlayers; i++ {
 		g.Players[i].Money = p.InitialCash
 		g.Players[i].Status = core.PlayerStatusActive
@@ -66,7 +66,7 @@ func (g *Game) refreshLastSnapshot() {
 }
 
 func (g *Game) startBuildPhase() {
-	g.Phase = phaseBuild
+	g.phase = phaseBuild
 	for i := 0; i < g.NumPlayers; i++ {
 		if g.Players[i].Status == core.PlayerStatusActive {
 			g.Players[i].IsBuilding = true
@@ -95,7 +95,7 @@ func (g *Game) anyPlayerHasPossibleActions() bool {
 }
 
 func (g *Game) runUntilBuildPhase() {
-	switch g.Phase {
+	switch g.phase {
 	case phaseGameStart:
 		g.startBuildPhase()
 	case phaseBuild:
@@ -105,15 +105,15 @@ func (g *Game) runUntilBuildPhase() {
 		if g.Status == core.GameStatusOngoing {
 			g.startBuildPhase()
 		} else {
-			g.Phase = phaseGameEnd
+			g.phase = phaseGameEnd
 		}
 	case phaseGameEnd:
 	}
 }
 
-// ApplyPlayerAction applies a build-phase action code (0..14) for the given player index.
+// ApplyPlayerAction applies an action for the given player index.
 func (g *Game) ApplyPlayerAction(playerIndex int, actionCode int32) error {
-	if g.Phase != phaseBuild {
+	if g.phase != phaseBuild {
 		return ErrNotBuildPhase
 	}
 	if playerIndex < 0 || playerIndex >= g.NumPlayers {
@@ -130,17 +130,17 @@ func (g *Game) ApplyPlayerAction(playerIndex int, actionCode int32) error {
 	if !g.anyPlayerHasPossibleActions() {
 		if actionCode == ActionFinished {
 			if !g.haveBuildingPlayers() {
-				g.Phase = phaseOperate
+				g.phase = phaseOperate
 			}
 		} else {
-			if g.Params.TakeoverRule == legacy.TakeoverRuleForcedTakeover {
+			if g.Params.TakeoverRule == params.TakeoverRuleForcedTakeover {
 				g.Status = core.GameStatusLoss
 				g.Reason = core.LossConditionUnownedTakeoverAssets
 			} else {
 				g.Status = core.GameStatusLoss
 				g.Reason = core.LossConditionNoActivePlayers
 			}
-			g.Phase = phaseGameEnd
+			g.phase = phaseGameEnd
 		}
 	}
 	g.runUntilBuildPhase()

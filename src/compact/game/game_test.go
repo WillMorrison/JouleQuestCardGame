@@ -60,8 +60,8 @@ func TestApplyFinishedAdvancesWhenAllDone(t *testing.T) {
 	if g.Status != core.GameStatusOngoing {
 		t.Fatalf("Status = %v, want ongoing", g.Status)
 	}
-	if g.Phase != phaseBuild {
-		t.Fatalf("Phase = %d, want build after operate+startBuildPhase", g.Phase)
+	if g.phase != phaseBuild {
+		t.Fatalf("Phase = %d, want build after operate+startBuildPhase", g.phase)
 	}
 	if g.Round() != 2 {
 		t.Fatalf("Round = %d, want 2", g.Round())

@@ -3,14 +3,14 @@ package game
 import (
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
 	"github.com/WillMorrison/JouleQuestCardGame/core"
-	legacy "github.com/WillMorrison/JouleQuestCardGame/params"
+	"github.com/WillMorrison/JouleQuestCardGame/params"
 )
 
 func (g *Game) generationConstraintMet(am assets.AssetMix) bool {
 	switch g.Params.GenerationConstraintRule {
-	case legacy.GenerationConstraintRuleMinimum:
+	case params.GenerationConstraintRuleMinimum:
 		return am.GenerationAssets() >= int(g.Params.GenerationConstraint)
-	case legacy.GenerationConstraintRuleMaxDecrease:
+	case params.GenerationConstraintRuleMaxDecrease:
 		prev := g.LastSnapshot.AssetMix.GenerationAssets()
 		return (prev - am.GenerationAssets()) <= int(g.Params.GenerationConstraint)
 	default:
@@ -20,9 +20,9 @@ func (g *Game) generationConstraintMet(am assets.AssetMix) bool {
 
 func (g *Game) winConditionMet() bool {
 	switch g.Params.WinConditionRule {
-	case legacy.WinConditionRuleRenewablePenetrationThreshold:
+	case params.WinConditionRuleRenewablePenetrationThreshold:
 		return g.LastSnapshot.AssetMix.RenewablePenetration() >= int(g.Params.RenewablePenetration)
-	case legacy.WinConditionRuleLastFossilLoses:
+	case params.WinConditionRuleLastFossilLoses:
 		var n int
 		for i := 0; i < g.NumPlayers; i++ {
 			if g.Players[i].Status == core.PlayerStatusActive && g.Players[i].hasFossilAssets() {
@@ -106,7 +106,7 @@ func (g *Game) runOperatePhase() {
 		return
 	}
 
-	if g.Params.WinConditionRule == legacy.WinConditionRuleLastFossilLoses {
+	if g.Params.WinConditionRule == params.WinConditionRuleLastFossilLoses {
 		idx := g.firstPlayerIndexWithFossil()
 		if idx >= 0 {
 			g.Players[idx].setLoss(core.LossConditionLastPlayerWithFossilAssets)
