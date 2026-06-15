@@ -146,9 +146,9 @@ For each failure path, **capture state** (deep enough: status, reason, phase, ro
 
 - [x] Parity harness + observable field comparator + RNG story decided  
 - [x] Masks vs reference (set equality) on small cases  
-- [ ] Inactive / lost → no actions  
-- [ ] Forced takeover → cannot finish with pool non-empty  
-- [ ] Build start → modes reset for active players  
+- [x] Inactive / lost → no actions  
+- [x] Forced takeover → cannot finish with pool non-empty  
+- [x] Build start → modes reset for active players  
 - [ ] Invalid action / bad index / `actionCode(200)` → no state change  
 - [ ] `NewGame` / params errors  
 - [ ] Accessor out-of-range contract  
