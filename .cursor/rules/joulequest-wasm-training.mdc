@@ -29,14 +29,14 @@ Full motivation and interface shape: [WASM_TRAINING_INTERFACE.md](../../WASM_TRA
 
 ## Parity tests vs reference `GameState`
 
-`ProceduralGameState` / `GameState` are **legacy** of exploratory design and may have quirks (slice ordering, etc.). Operate-phase randomness uses **in-state PCG** (`SetRNGSeed` on `GameState`), aligned with the compact engine.
+`ProceduralGameState` / `GameState` are **legacy** of exploratory design and may have other quirks. Holdings and the takeover pool are **`assets.AssetMix`** on both reference and compact paths. Operate-phase randomness uses **in-state PCG** (`SetRNGSeed` on `GameState`), aligned with the compact engine.
 
-- **Ground truth** for parity is the **training-observable surface**: what `rest_api` exposes (see `stateResponse` in `src/cmd/rest_api/main.go`) — status, reason, round, emissions, players (including holdings as `assets.AssetMix`), last-round snapshot, **`TakeoverPool` as `assets.AssetMix`**. RL code does not see per-asset ordering in the pool.
+- **Ground truth** for parity is the **training-observable surface**: what `rest_api` exposes (see `stateResponse` in `src/cmd/rest_api/main.go`) — status, reason, round, emissions, players (including holdings as `assets.AssetMix`), last-round snapshot, **`TakeoverPool` as `assets.AssetMix`**.
 - The eventual WASM module should expose **the same logical fields** as scalars/bitfields.
-- If parity fails and the cause looks like **order dependence**, **RNG seeding or draw-count drift** between harnesses, or other reference-only behavior: **stop and ask the project owner** before weakening tests or adding hacks; the owner may change the Go reference implementation so parity stays honest.
+- If parity fails and the cause looks like **RNG seeding or draw-count drift** between harnesses, ambiguous rules, or other reference-only behavior: **stop and ask the project owner** before weakening tests or adding hacks; the owner may change the Go reference implementation so parity stays honest.
 
 ## Takeover pool (canonical model)
 
-- Model the pool as **one `AssetMix`-shaped multiset** (five buckets). Order does not matter.
+- Model the pool as **one `AssetMix`** (five buckets), same as player holdings and the reference engine.
 - `TakeoverRuleForcedTakeover`: pool must be empty before finishing build when the rules say so; same outcomes as today’s rules.
 - `TakeoverRuleVirtualOwner`: pool counts feed grid/emissions; mode split in buckets still matters for those assets.

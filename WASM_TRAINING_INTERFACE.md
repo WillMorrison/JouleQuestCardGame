@@ -46,9 +46,9 @@ The REST layer defines the relevant shape. For example, [`stateResponse`](src/cm
 - Last round snapshot  
 - **`TakeoverPool` as `assets.AssetMix`**
 
-There is **no ordering** for takeover-pool assets on the wire — only **counts per bucket**. Parity tests and the compact engine should treat that **AssetMix-shaped multiset** as canonical for the pool.
+There is **no per-asset identity** on the wire — only **counts per bucket** in each `AssetMix`. Parity tests compare those mixes directly; reference and compact both store holdings and the takeover pool as **`assets.AssetMix`**.
 
-The reference `GameState` / `ProceduralGameState` code paths are a **mechanical oracle** for tests; they grew through exploratory design and may have internal quirks (e.g. slice order). If tests disagree with the compact engine only on **non-observable** internals, **escalate to the maintainer** rather than papering over differences; the reference implementation may be updated so parity stays aligned with the API contract.
+The reference `GameState` / `ProceduralGameState` code paths are a **mechanical oracle** for tests. If observable fields disagree with the compact engine, **escalate to the maintainer** rather than papering over differences; the reference implementation may be updated so parity stays aligned with the API contract.
 
 ## WASM export shape (planned)
 

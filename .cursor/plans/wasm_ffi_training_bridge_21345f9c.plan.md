@@ -9,7 +9,7 @@ todos:
     content: Implement fixed-layout training engine package (MaxPlayers 10, mask-based actions, seeded RNG, no logging) alongside src/engine
     status: completed
   - id: parity-tests
-    content: Add Go parity tests vs ProceduralGameState; compare only the OpenAPI/WASM observable surface (stateResponse-shaped fields + action masks), same SetRNGSeed/actions; escalate ordering or ref quirks to human
+    content: Add Go parity tests vs ProceduralGameState; compare only the OpenAPI/WASM observable surface (stateResponse-shaped fields + action masks), same SetRNGSeed/actions; escalate ref quirks to human
     status: pending
   - id: wasm-cmd
     content: Add cmd/joulequest_wasm with //go:wasmexport API, error codes, WASI reactor build instructions
@@ -29,7 +29,7 @@ isProject: false
 
 - Python ([`rl_agent/game_client.py`](rl_agent/game_client.py)) uses synchronous OpenAPI client calls over UDS via httpx, which serializes work and pays JSON costs.
 - The Go engine’s interactive path is [`ProceduralGameState`](src/engine/procedural.go): build phase actions via `ApplyPlayerAction`, then `runUntilBuildPhase` runs `OperatePhase` when the round advances—this is the right control inversion to mirror in WASM.
-- Core state today lives in [`GameState`](src/engine/game_state.go) / [`PlayerState`](src/engine/game_state.go) with **slices of `assets.Asset`**, [`possibleActions`](src/engine/build.go) building a **new `[]PlayerAction` every call**—that allocation-heavy shape is still awkward for WASM even though operate-phase risk now uses **`math/rand/v2.PCG`** on `GameState` ([`SetRNGSeed`](src/engine/game_state.go), same draw pattern as compact).
+- Reference [`GameState`](src/engine/game_state.go) now holds player holdings and the takeover pool as **`assets.AssetMix`**, same as compact. Remaining WASM motivations: **fixed player slots**, **mask-based actions** (no per-call `[]PlayerAction` allocation), **no `eventlog`**, **map-free params** in [`compact/params`](src/compact/params), and TinyGo-friendly dependencies. Operate-phase risk uses **`math/rand/v2.PCG`** on `GameState` ([`SetRNGSeed`](src/engine/game_state.go), same draw pattern as compact).
 
 ```mermaid
 flowchart LR
@@ -55,7 +55,7 @@ flowchart LR
 
 - **Go compiled for WASI / training engine**: no goroutines, channels, or `select`; avoid `fmt`/`string` in exported hot paths; prefer `int32` for exported surfaces; no reliance on package `init` that spawns background work; keep globals to the documented singleton game/params; document `//go:wasmexport` signature limits (Go 1.24 requires WASM-friendly parameter/return types—stick to `int32`/`uint32` as you proposed).
 - **Python `rl_agent/`**: use **uv** for installs/scripts; new client code targets **wasmtime** (or chosen runtime) rather than httpx for game stepping.
-- **Parity tests and reference engine**: [`ProceduralGameState`](src/engine/procedural.go) / [`GameState`](src/engine/game_state.go) are legacy of exploratory rule design and carry implementation quirks. **Do not** treat their internal representations (e.g. slice ordering in the takeover pool) as the ground truth for parity. Ground truth is the **training-observable surface**: what [`rest_api`](src/cmd/rest_api/main.go) puts on the wire (e.g. [`stateResponse`](src/cmd/rest_api/main.go) — status, reason, round, emissions, players as serialized, `LastRoundSnapshot`, **`TakeoverPool` as `assets.AssetMix`**) and what the WASM module will export as scalars—because **that** is what RL agents can observe (Python never sees per-asset ordering in the pool today). When parity fails and the cause looks like **order dependence**, **mismatched PCG seeding or extra draws** between harnesses, or other reference quirks, **stop and ask the project owner** before weakening tests or adding hacks; the owner may update the existing Go code so parity can be written cleanly.
+- **Parity tests and reference engine**: [`ProceduralGameState`](src/engine/procedural.go) / [`GameState`](src/engine/game_state.go) are legacy of exploratory rule design and carry implementation quirks. Ground truth is the **training-observable surface**: what [`rest_api`](src/cmd/rest_api/main.go) puts on the wire (e.g. [`stateResponse`](src/cmd/rest_api/main.go) — status, reason, round, emissions, players as serialized, `LastRoundSnapshot`, **`TakeoverPool` as `assets.AssetMix`**) and what the WASM module will export as scalars. When parity fails and the cause looks like **mismatched PCG seeding or extra draws** between harnesses, ambiguous rules, or other reference quirks, **stop and ask the project owner** before weakening tests or adding hacks; the owner may update the existing Go code so parity can be written cleanly.
 - **Scope**: these rules describe *this* WASM training interface effort—not generic “always write tests” guidance.
 
 **Architecture document** at repo root next to [`README.md`](README.md) (name e.g. `WASM_TRAINING_INTERFACE.md`):
@@ -65,7 +65,7 @@ flowchart LR
 - **Semantics**: one hidden global game + params in the module; Python calls `_initialize` (WASI reactor) then `Reset` / `ApplyAction` / getters; **no event log** in this build (training does not consume [`get_log`](rl_agent/game_client.py)).
 - **Build**: document Go **1.24** command line using **WASI reactor** mode and `//go:wasmexport` (official story: `GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared`, call module `_initialize` before exports—see [Extensible Wasm Applications with Go](https://go.dev/blog/wasmexport)).
 - **Tradeoffs**: WASM binary size vs TinyGo (optional future); parity still needs an explicit **shared seed contract** (`SetRNGSeed`) across reference, compact, and WASM exports.
-- **Parity with today’s stack**: WASM is meant to give Python a **similar** contract to OpenAPI, not to freeze every internal detail of `GameState`. Contract-level parity (what agents observe) matters more than matching slice layouts.
+- **Parity with today’s stack**: WASM is meant to give Python a **similar** contract to OpenAPI. Contract-level parity (what agents observe) is the bar for tests.
 
 ## Step 1 — Compact, training-only engine (alongside existing code)
 
@@ -74,8 +74,8 @@ Add a **new package** under [`src/`](src/) (e.g. `engine/traincompact` or `engin
 **Layout / types**
 
 - **`MaxPlayers = 10`**: fixed `[MaxPlayers]playerState` with **`numPlayers` int**; all unused slots inert.
-- **Assets**: do **not** use `[]Asset` pointers. A **5-bucket mix** matching [`assets.AssetMix`](src/assets/asset_mix.go) is necessary (renewable / battery arb / battery cap / fossil wholesale / fossil cap)—*not* “three asset types only,” or pledge and PnL break.
-- **Takeover pool**: model it with **one `AssetMix`-shaped struct** (same five counters as player assets). It holds **unowned** assets moved from bankrupt players, **including the mode split** (wholesale vs capacity) they had when they entered the pool—**order does not matter**; only counts per bucket matter. This keeps the type surface small (reuse the same mix type mentally and in code) and is a deliberate **simplification** versus today’s slice of pointers + `slices.IndexFunc` ordering in [`applyPlayerAction`](src/engine/build.go).
+- **Assets**: use the same **5-bucket `assets.AssetMix`** as the reference engine (renewable / battery arb / battery cap / fossil wholesale / fossil cap)—*not* “three asset types only,” or pledge and PnL break. Compact stores mixes in **fixed `[MaxPlayers]` slots** without heap growth per player.
+- **Takeover pool**: one **`AssetMix`** (same five counters as player assets), holding unowned assets moved from bankrupt players **with mode split preserved** (wholesale vs capacity) via [`TakeAllAssetsFrom`](src/assets/asset_mix.go) / [`TakeOneAssetFrom`](src/assets/asset_mix.go) semantics aligned with reference [`build.go`](src/engine/build.go).
   - **[`TakeoverRuleForcedTakeover`](src/params/params.go)**: pool must be **all zeros** before a player can finish the build round (same rule as today); possible actions and loss conditions follow from “non-empty pool with no affordable takeover.”
   - **[`TakeoverRuleVirtualOwner`](src/params/params.go)**: the pool mix contributes to **grid / emissions** like other unowned assets; mode buckets still matter here because those assets operate without a player owner.
   - **Takeover by a player**: when an asset leaves the pool for a portfolio, treat it as **default mode** (same as today’s `assets.New` / post-takeover behavior); the compact engine should **not** need “un-pledge” handling for pool assets because pool semantics are not tied to per-slot mode once transferred—align with existing “reset modes at build start” behavior.
@@ -93,14 +93,14 @@ Add a **new package** under [`src/`](src/) (e.g. `engine/traincompact` or `engin
 **Parity tests (Go) — motivation and scope**
 
 - **Why these tests exist**: the WASM module should be a **drop-in engine** behind the same conceptual API Python already uses against the OpenAPI server. Training code must keep seeing **the same information** it already can: nothing more, nothing less, from the host’s point of view.
-- **What agents actually observe**: the REST layer already defines the relevant shape. In [`rest_api`](src/cmd/rest_api/main.go), [`stateResponse`](src/cmd/rest_api/main.go) exposes game status, reason, round, emissions, players (JSON-marshaled [`PlayerState`](src/engine/game_state.go) — including money, status, and **`assets.AssetMix` for holdings**), last-round snapshot, and **`TakeoverPool` as `assets.AssetMix`**. There is **no ordering** exposed for pool assets—only counts per bucket—so parity assertions should be framed in terms of that **API-visible surface** and the **eventual WASM scalar getters**, not incidental details of how [`GameState`](src/engine/game_state.go) stores slices internally.
-- **Reference implementation caveat**: `ProceduralGameState` / `GameState` grew through exploratory design; they are the **convenient mechanical oracle** to drive with the same action stream, not a spec for internal representation. When tests disagree with the compact engine, prefer checking whether the **observable** state matches; if the mismatch traces to **slice order**, **PCG state divergence** (seed or number of draws), or other legacy quirks, **do not paper over it**—**ask the project owner** whether to adjust the existing engine so tests and WASM stay aligned.
+- **What agents actually observe**: the REST layer already defines the relevant shape. In [`rest_api`](src/cmd/rest_api/main.go), [`stateResponse`](src/cmd/rest_api/main.go) exposes game status, reason, round, emissions, players (JSON-marshaled [`PlayerState`](src/engine/game_state.go) — including money, status, and **`assets.AssetMix` for holdings**), last-round snapshot, and **`TakeoverPool` as `assets.AssetMix`**. Parity assertions should match that **API-visible surface** and the **eventual WASM scalar getters**.
+- **Reference implementation caveat**: `ProceduralGameState` / `GameState` grew through exploratory design; they are the **convenient mechanical oracle** to drive with the same action stream. When tests disagree with the compact engine, prefer checking whether the **observable** state matches; if the mismatch traces to **PCG state divergence** (seed or number of draws) or unclear rules, **do not paper over it**—**ask the project owner** whether to adjust the existing engine so tests and WASM stay aligned.
 
 **Parity tests (Go) — mechanics**
 
 - In the same module or `_test.go`, add tests that **drive reference `ProceduralGameState`** (with a no-op / discarding logger) and the compact engine with the **same params, `SetRNGSeed` value, and action stream**.
-- After each step, compare fields that match **OpenAPI / RL observability**: game status, reason, round, emissions counter, last snapshot’s asset mix + grid/price enums, each player’s status, money, and **asset mix**, **takeover pool as five bucket counts**, and **per-player legal action masks** (same 15-way encoding as the PettingZoo env). Derive the reference side’s expected mix for players and pool the same way the API does (e.g. marshaling uses [`getAssetMix`](src/engine/game_state.go) for players), not raw slice indices.
-- Start from smaller scenarios (single-player build quirks, takeover pool forced rule, pledge eligibility) and grow to randomized action sequences. If a mismatch appears **only** because slice order in the reference engine changed which concrete asset moved while **all `AssetMix` counts stay identical**, treat that as a **reference implementation** issue to fix or discuss with the owner—not a reason to complicate the compact/WASM design.
+- After each step, compare fields that match **OpenAPI / RL observability**: game status, reason, round, emissions counter, last snapshot’s asset mix + grid/price enums, each player’s status, money, and **asset mix**, **takeover pool as five bucket counts**, and **per-player legal action masks** (same 15-way encoding as the PettingZoo env).
+- Start from smaller scenarios (single-player build quirks, takeover pool forced rule, pledge eligibility) and grow to randomized action sequences.
 
 ## Step 2 — WASM client library (Go)
 
@@ -144,7 +144,7 @@ New **`main` package** for the reactor (e.g. [`src/cmd/joulequest_wasm/main.go`]
 
 ## Key risks / decisions baked into this plan
 
-- **Parity test ground truth**: compare **OpenAPI/WASM-visible state** (e.g. [`stateResponse`](src/cmd/rest_api/main.go)), not `GameState` internals. Agents implementing tests should **escalate** ordering, seeding, or other reference quirks to the owner instead of weakening assertions.
-- **Takeover representation**: multiset (`AssetMix`-shaped pool) is **canonical** for the training/WASM engine; order is explicitly irrelevant. Parity tests validate observables under this model. If the REST/slice engine ever disagrees in an edge case, prefer **aligning the slice engine** to multiset semantics (or accept a documented divergence) rather than adding a second, heavier representation for WASM.
+- **Parity test ground truth**: compare **OpenAPI/WASM-visible state** (e.g. [`stateResponse`](src/cmd/rest_api/main.go)), not incidental internals. Agents implementing tests should **escalate** seeding issues or other reference quirks to the owner instead of weakening assertions.
+- **Takeover representation**: both reference and compact use **`AssetMix`** for the pool; parity compares five-bucket counts (and mode split within buckets) directly.
 - **Go WASM export typing**: stay within documented WASM-signature limits; if a needed function can’t be exported, split into multiple `int32` getters.
 - **Randomness**: operate-phase draws use **PCG on `GameState`** in the reference ([`OperatePhase`](src/engine/operation.go)); compact mirrors that. WASM must keep **explicit, seedable state** (no implicit package-level RNG) for tests and RL.

@@ -5,7 +5,7 @@ import (
 	"github.com/WillMorrison/JouleQuestCardGame/core"
 )
 
-// Player is one player's compact state (five-bucket mix, no per-asset slices).
+// Player is one player's compact state
 type Player struct {
 	Status     core.PlayerStatus
 	Reason     core.LossCondition

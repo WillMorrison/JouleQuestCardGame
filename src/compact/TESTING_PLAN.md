@@ -8,11 +8,11 @@ This document is a **plan only** (no test implementations). It covers **parity**
 
 | Track | Purpose |
 |--------|---------|
-| **Parity** | Confidence that compact output matches what training already observes via REST (and future WASM getters), not slice-internals of `GameState`. |
+| **Parity** | Confidence that compact output matches what training already observes via REST (and future WASM getters) on the **OpenAPI-visible** surface. |
 | **Specification** | Tests as living documentation: build rules, masks, takeover semantics, operate phase, phase machine, RNG. |
 | **Safety** | Invalid inputs do not corrupt state; bounds and error paths are explicit. |
 
-Escalation when parity disagrees for non-observable reasons: see [.cursor/rules/joulequest-wasm-training.mdc](../../.cursor/rules/joulequest-wasm-training.mdc).
+Escalation when parity disagrees for ambiguous rules or harness bugs: see [.cursor/rules/joulequest-wasm-training.mdc](../../.cursor/rules/joulequest-wasm-training.mdc).
 
 ---
 
@@ -30,8 +30,7 @@ Escalation when parity disagrees for non-observable reasons: see [.cursor/rules/
 ### 3.1 Motivation and ground truth
 
 - **Oracle**: drive [`engine.ProceduralGameState`](../../engine/procedural.go) with a no-op / discarding [`eventlog.Logger`](../../eventlog/eventlog.go) and the same **ordered list of `(playerIndex, actionCode)`** as [`compact/game.Game.ApplyPlayerAction`](game/game.go).
-- **Compare**: only fields on the **OpenAPI / RL observable** surface (see [`stateResponse`](../../cmd/rest_api/main.go) and [plan § parity](../../.cursor/plans/wasm_ffi_training_bridge_21345f9c.plan.md)): status, reason, round, emissions, last snapshot mix + `PriceVolatility` + `GridStability`, per-player status, money, **asset mix** (same derivation as JSON: aggregate from holdings, not slice order), **takeover pool `AssetMix`**, and **per-player `PossibleActionMask`** (15 bits, same encoding as PettingZoo / `PlayerActionToInt`).
-- **Do not** assert on raw `[]Asset` / takeover slice order.
+- **Compare**: only fields on the **OpenAPI / RL observable** surface (see [`stateResponse`](../../cmd/rest_api/main.go) and [plan § parity](../../.cursor/plans/wasm_ffi_training_bridge_21345f9c.plan.md)): status, reason, round, emissions, last snapshot mix + `PriceVolatility` + `GridStability`, per-player status, money, **player `AssetMix`**, **takeover pool `AssetMix`**, and **per-player `PossibleActionMask`** (15 bits, same encoding as PettingZoo / `PlayerActionToInt`).
 
 ### 3.2 RNG alignment
 
@@ -50,14 +49,13 @@ Escalation when parity disagrees for non-observable reasons: see [.cursor/rules/
 
 | Symptom | Action |
 |---------|--------|
-| Mixes and masks match; only slice order differs | Treat as reference bug or document; do not weaken compact tests. |
 | PCG stream mismatch despite same seed | Verify both sides called `SetRNGSeed` identically and the same number of draws ran before the failing step; otherwise escalate. |
 | Ambiguous rule intent | Ask maintainer; capture answer in test name or comment. |
 
 ### 3.5 Specific scenarios
 
 - **Mask vs OpenAPI set**: for small hand-built states, expand mask to a set of `(playerIndex, actionCode)` and compare to `ProceduralGameState.PossibleActions()` **as sets** (order irrelevant), for the same params when parity harness exists. Alternatively, write a helper to convert `ProceduralGameState.PossibleActions()` to a set of `(playerIndex, actionMask)` and compare those with the corresponding pairs from the compact implementation.
-- **Takeover pool removals**: The new implementation of scrap and takeover prefer **arbitrage before capacity** per type. The old slice implementation took the first element with a matching type from the pool, which made it dependent on the order of addition to the pool. These parity tests should just check that the combined number of arbitrage+capacity battery and fossil assets remaining in the takeover pool matches the legacy implementation, so that they are not sensitive to order-related mode differences.
+- **Takeover / scrap / pledge**: parity compares full **five-bucket** player and pool mixes after each step. Reference and compact both model holdings with [`assets.AssetMix`](../../assets/asset_mix.go); build/scrap/takeover/pledge should follow the same bucket semantics as [`RemoveOneAsset`](../../assets/asset_mix.go), [`TakeOneAssetFrom`](../../assets/asset_mix.go), and related helpers on the reference side.
 
 ---
 
@@ -85,8 +83,7 @@ These document **rules of the game** independent of the reference implementation
 
 ### 4.4 Apply / money / assets
 
-- **Build / scrap / takeover / takeover-scrap / pledge**: each legal transition updates **money** and **five-bucket mixes** (player + pool) consistently with costs from [`CompactParams`](params/params.go).
-- **Deterministic multiset removals**: scrap and pool removal prefer **arbitrage before capacity** per type (document with examples so future readers know why two orders of scrap can differ from legacy slices but match `AssetMix`).
+- **Build / scrap / takeover / takeover-scrap / pledge**: each legal transition updates **money** and **five-bucket mixes** (player + pool) consistently with costs from [`CompactParams`](params/params.go) and the same [`assets.AssetMix`](../../assets/asset_mix.go) bucket rules as the reference engine.
 
 ### 4.5 Operate phase
 
@@ -125,7 +122,7 @@ For each failure path, **capture state** (deep enough: status, reason, phase, ro
 ## 6. `compact/params` tests
 
 - **`FromLegacy`**: identity on `params.Default`; spot-check each PnL table int32; rule enum passthrough.
-- **`OperatePnLForPlayerMix`**: tables for each **capacity rule** + **carbon tax** + **fossil wholesale vs capacity** counts vs legacy `Params.PnL` on synthetic `assets.Asset` slices (helper builds legacy state) for one volatility index and emissions threshold — ensures compact arithmetic matches reference **PnL** without running full engine.
+- **`OperatePnLForPlayerMix`**: tables for each **capacity rule** + **carbon tax** + **fossil wholesale vs capacity** counts vs legacy [`GameState.playerPnL`](../../engine/paramoperation.go) on synthetic **`assets.AssetMix`** fixtures for one volatility index and emissions threshold — ensures compact arithmetic matches reference **PnL** without running full engine.
 
 ---
 
