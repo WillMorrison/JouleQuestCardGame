@@ -14,17 +14,6 @@ type Player struct {
 	IsBuilding bool
 }
 
-func (p *Player) resetModesForBuild() {
-	p.Mix.FossilsWholesale += p.Mix.FossilsCapacity
-	p.Mix.FossilsCapacity = 0
-	p.Mix.BatteriesArbitrage += p.Mix.BatteriesCapacity
-	p.Mix.BatteriesCapacity = 0
-}
-
-func (p Player) hasFossilAssets() bool {
-	return p.Mix.FossilsWholesale > 0 || p.Mix.FossilsCapacity > 0
-}
-
 func (p *Player) setLoss(reason core.LossCondition) {
 	p.Status = core.PlayerStatusLost
 	p.Reason = reason

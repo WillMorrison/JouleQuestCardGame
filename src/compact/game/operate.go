@@ -25,7 +25,7 @@ func (g *Game) winConditionMet() bool {
 	case params.WinConditionRuleLastFossilLoses:
 		var n int
 		for i := 0; i < g.NumPlayers; i++ {
-			if g.Players[i].Status == core.PlayerStatusActive && g.Players[i].hasFossilAssets() {
+			if g.Players[i].Status == core.PlayerStatusActive && g.Players[i].Mix.AssetsOfType(assets.TypeFossil) > 0 {
 				n++
 			}
 		}
@@ -125,7 +125,7 @@ func (g *Game) runOperatePhase() {
 
 func (g *Game) firstPlayerIndexWithFossil() int {
 	for i := 0; i < g.NumPlayers; i++ {
-		if g.Players[i].hasFossilAssets() {
+		if g.Players[i].Mix.AssetsOfType(assets.TypeFossil) > 0 {
 			return i
 		}
 	}
@@ -137,9 +137,3 @@ func (g *Game) SetRNGSeed(seed uint64) {
 	// The seed is used directly, the stream index is fixed to 0.
 	g.pcg.Seed(seed, 0)
 }
-
-// LastPriceVolatility exposes core enum for API parity.
-func (g *Game) LastPriceVolatility() core.PriceVolatility { return g.LastSnapshot.PriceVolatility }
-
-// LastGridStability exposes core enum for API parity.
-func (g *Game) LastGridStability() core.GridStability { return g.LastSnapshot.GridStability }

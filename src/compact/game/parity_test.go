@@ -75,11 +75,11 @@ func checkParity(t *testing.T, step int, pgs *engine.ProceduralGameState, cg *ga
 	if legacyGame.LastSnapshot.AssetMix != cg.LastSnapshot.AssetMix {
 		t.Errorf("step %d: LastSnapshot.AssetMix mismatch: legacy=%+v, compact=%+v", step, legacyGame.LastSnapshot.AssetMix, cg.LastSnapshot.AssetMix)
 	}
-	if legacyGame.LastSnapshot.PriceVolatility != cg.LastPriceVolatility() {
-		t.Errorf("step %d: LastSnapshot.PriceVolatility mismatch: legacy=%v, compact=%v", step, legacyGame.LastSnapshot.PriceVolatility, cg.LastPriceVolatility())
+	if legacyGame.LastSnapshot.PriceVolatility != cg.LastSnapshot.PriceVolatility {
+		t.Errorf("step %d: LastSnapshot.PriceVolatility mismatch: legacy=%v, compact=%v", step, legacyGame.LastSnapshot.PriceVolatility, cg.LastSnapshot.PriceVolatility)
 	}
-	if legacyGame.LastSnapshot.GridStability != cg.LastGridStability() {
-		t.Errorf("step %d: LastSnapshot.GridStability mismatch: legacy=%v, compact=%v", step, legacyGame.LastSnapshot.GridStability, cg.LastGridStability())
+	if legacyGame.LastSnapshot.GridStability != cg.LastSnapshot.GridStability {
+		t.Errorf("step %d: LastSnapshot.GridStability mismatch: legacy=%v, compact=%v", step, legacyGame.LastSnapshot.GridStability, cg.LastSnapshot.GridStability)
 	}
 
 	for i := 0; i < int(cg.NumPlayers); i++ {

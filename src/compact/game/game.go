@@ -1,7 +1,6 @@
 package game
 
 import (
-	"fmt"
 	randv2 "math/rand/v2"
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
@@ -38,31 +37,53 @@ type Game struct {
 
 // NewGame constructs a game in the first build phase (same entry behavior as engine.NewProceduralGame).
 func NewGame(numPlayers int, p cparams.CompactParams) (*Game, error) {
-	if numPlayers < 2 || numPlayers > cparams.MaxPlayers {
-		return nil, fmt.Errorf("%w: %d", ErrInvalidPlayerCount, numPlayers)
-	}
-	n := int(p.StartingFossils(numPlayers))
-	if n <= 0 {
-		return nil, ErrNoStartingFossils
-	}
 	var g Game
-	g.Params = p
-	g.NumPlayers = numPlayers
-	g.Status = core.GameStatusOngoing
-	g.phase = phaseGameStart
-	for i := 0; i < numPlayers; i++ {
-		g.Players[i].Money = p.InitialCash
-		g.Players[i].Status = core.PlayerStatusActive
-		g.Players[i].IsBuilding = true
-		g.Players[i].Mix.FossilsWholesale = n
+	err := g.Reset(numPlayers, p)
+	if err != nil {
+		return nil, err
 	}
-	g.refreshLastSnapshot()
-	g.startBuildPhase()
 	return &g, nil
 }
 
-func (g *Game) refreshLastSnapshot() {
+// Reset resets the game to its initial state. The RNG is not reset
+func (g *Game) Reset(numPlayers int, p cparams.CompactParams) error {
+	if numPlayers < 2 || numPlayers > cparams.MaxPlayers {
+		return ErrInvalidPlayerCount
+	}
+	startingFossils := int(p.StartingFossils(numPlayers))
+	if startingFossils <= 0 {
+		return ErrNoStartingFossils
+	}
+
+	g.Params = p
+
+	g.phase = phaseGameStart
+	g.Status = core.GameStatusOngoing
+	g.Reason = core.LossConditionNone
+	g.Round = 0
+	g.CarbonEmissions = 0
+	g.TakeoverPool = assets.AssetMix{}
+
+	g.NumPlayers = numPlayers
+	for i := range g.Players {
+		if i < numPlayers {
+			g.Players[i].Money = p.InitialCash
+			g.Players[i].Status = core.PlayerStatusActive
+			g.Players[i].Reason = core.LossConditionNone
+			g.Players[i].IsBuilding = true
+			g.Players[i].Mix = assets.AssetMix{FossilsWholesale: startingFossils}
+		} else {
+			// Reset unused players to default values
+			g.Players[i].Money = 0
+			g.Players[i].Status = core.PlayerStatusLost
+			g.Players[i].Reason = core.LossConditionNone
+			g.Players[i].IsBuilding = false
+			g.Players[i].Mix = assets.AssetMix{}
+		}
+	}
 	g.LastSnapshot = snapshotFromGlobalMix(g.globalAssetMix())
+	g.startBuildPhase()
+	return nil
 }
 
 func (g *Game) startBuildPhase() {
@@ -70,7 +91,7 @@ func (g *Game) startBuildPhase() {
 	for i := 0; i < g.NumPlayers; i++ {
 		if g.Players[i].Status == core.PlayerStatusActive {
 			g.Players[i].IsBuilding = true
-			g.Players[i].resetModesForBuild()
+			g.Players[i].Mix.ResetAllCapacityPledges()
 		}
 	}
 	g.Round++
