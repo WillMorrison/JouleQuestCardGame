@@ -38,9 +38,9 @@ func (g *Game) winConditionMet() bool {
 func (g *Game) globalAssetMix() assets.AssetMix {
 	var m assets.AssetMix
 	for i := 0; i < g.NumPlayers; i++ {
-		addMix(&m, g.Players[i].Mix)
+		m.Add(g.Players[i].Mix)
 	}
-	addMix(&m, g.TakeoverPool)
+	m.Add(g.TakeoverPool)
 	return m
 }
 
@@ -89,7 +89,7 @@ func (g *Game) runOperatePhase() {
 		p.Money += pnl
 		if p.Money < 0 {
 			p.setLoss(core.LossConditionPlayerBankrupt)
-			moveMixTo(&g.TakeoverPool, &p.Mix)
+			g.TakeoverPool.TakeAllAssetsFrom(&p.Mix)
 			numActive--
 		}
 	}
