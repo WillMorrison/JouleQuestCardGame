@@ -43,8 +43,8 @@ func TestNewGame_EntersBuildPhaseRoundOneWithActiveBuildingPlayers(t *testing.T)
 	if g.Status != core.GameStatusOngoing {
 		t.Errorf("Status = %v, want ongoing", g.Status)
 	}
-	if g.Round() != 1 {
-		t.Errorf("Round = %d, want 1", g.Round())
+	if g.Round != 1 {
+		t.Errorf("Round = %d, want 1", g.Round)
 	}
 	wantFossils := int(cp.StartingFossils(g.NumPlayers))
 	for i := range g.NumPlayers {
@@ -74,7 +74,7 @@ func TestStartBuildPhase_ResetsCapacityModesForActivePlayers(t *testing.T) {
 		FossilsWholesale:   4,
 		FossilsCapacity:    2,
 	}
-	roundBefore := g.Round()
+	roundBefore := g.Round
 
 	// act
 	g.startBuildPhase()
@@ -91,8 +91,8 @@ func TestStartBuildPhase_ResetsCapacityModesForActivePlayers(t *testing.T) {
 	if !g.Players[0].IsBuilding {
 		t.Error("active player should be building after startBuildPhase")
 	}
-	if g.Round() != roundBefore+1 {
-		t.Errorf("Round = %d, want %d", g.Round(), roundBefore+1)
+	if g.Round != roundBefore+1 {
+		t.Errorf("Round = %d, want %d", g.Round, roundBefore+1)
 	}
 }
 
@@ -135,8 +135,8 @@ func TestAfterOperate_NewBuildRoundResetsIsBuildingForActivePlayers(t *testing.T
 	if g.phase != phaseBuild {
 		t.Errorf("Phase = %v, want build after operate", g.phase)
 	}
-	if g.Round() != 2 {
-		t.Errorf("Round = %d, want 2", g.Round())
+	if g.Round != 2 {
+		t.Errorf("Round = %d, want 2", g.Round)
 	}
 	for i := range g.NumPlayers {
 		if g.Players[i].Status != core.PlayerStatusActive {
@@ -356,8 +356,8 @@ func TestApplyPlayerAction_Takeover_UpdatesPlayerPoolAndMoney(t *testing.T) {
 		t.Errorf("player mix = %+v, want %+v", g.PlayerAssetMix(0), wantMix)
 	}
 	wantPool := assets.AssetMix{Renewables: 1}
-	if g.TakeoverPoolMix() != wantPool {
-		t.Errorf("pool = %+v, want %+v", g.TakeoverPoolMix(), wantPool)
+	if g.TakeoverPool != wantPool {
+		t.Errorf("pool = %+v, want %+v", g.TakeoverPool, wantPool)
 	}
 }
 
@@ -387,8 +387,8 @@ func TestApplyPlayerAction_TakeoverScrap_UpdatesPoolAndMoneyOnly(t *testing.T) {
 		t.Errorf("player mix = %+v, want %+v", g.PlayerAssetMix(0), wantMix)
 	}
 	wantPool := assets.AssetMix{Renewables: 1}
-	if g.TakeoverPoolMix() != wantPool {
-		t.Errorf("pool = %+v, want %+v", g.TakeoverPoolMix(), wantPool)
+	if g.TakeoverPool != wantPool {
+		t.Errorf("pool = %+v, want %+v", g.TakeoverPool, wantPool)
 	}
 }
 

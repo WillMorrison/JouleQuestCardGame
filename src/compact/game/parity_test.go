@@ -59,21 +59,21 @@ func checkParity(t *testing.T, step int, pgs *engine.ProceduralGameState, cg *ga
 	t.Helper()
 	legacyGame := pgs.Game()
 
-	if legacyGame.Status != cg.GameStatus() {
-		t.Errorf("step %d: Status mismatch: legacy=%v, compact=%v", step, legacyGame.Status, cg.GameStatus())
+	if legacyGame.Status != cg.Status {
+		t.Errorf("step %d: Status mismatch: legacy=%v, compact=%v", step, legacyGame.Status, cg.Status)
 	}
-	if legacyGame.Reason != cg.LossReason() {
-		t.Errorf("step %d: Reason mismatch: legacy=%v, compact=%v", step, legacyGame.Reason, cg.LossReason())
+	if legacyGame.Reason != cg.Reason {
+		t.Errorf("step %d: Reason mismatch: legacy=%v, compact=%v", step, legacyGame.Reason, cg.Reason)
 	}
-	if int32(legacyGame.Round) != cg.Round() {
-		t.Errorf("step %d: Round mismatch: legacy=%v, compact=%v", step, legacyGame.Round, cg.Round())
+	if int32(legacyGame.Round) != cg.Round {
+		t.Errorf("step %d: Round mismatch: legacy=%v, compact=%v", step, legacyGame.Round, cg.Round)
 	}
-	if int32(legacyGame.CarbonEmissions) != cg.EmissionsCounter() {
-		t.Errorf("step %d: Emissions mismatch: legacy=%v, compact=%v", step, legacyGame.CarbonEmissions, cg.EmissionsCounter())
+	if int32(legacyGame.CarbonEmissions) != cg.CarbonEmissions {
+		t.Errorf("step %d: Emissions mismatch: legacy=%v, compact=%v", step, legacyGame.CarbonEmissions, cg.CarbonEmissions)
 	}
 
-	if legacyGame.LastSnapshot.AssetMix != cg.LastRoundAssetMix() {
-		t.Errorf("step %d: LastSnapshot.AssetMix mismatch: legacy=%+v, compact=%+v", step, legacyGame.LastSnapshot.AssetMix, cg.LastRoundAssetMix())
+	if legacyGame.LastSnapshot.AssetMix != cg.LastSnapshot.AssetMix {
+		t.Errorf("step %d: LastSnapshot.AssetMix mismatch: legacy=%+v, compact=%+v", step, legacyGame.LastSnapshot.AssetMix, cg.LastSnapshot.AssetMix)
 	}
 	if legacyGame.LastSnapshot.PriceVolatility != cg.LastPriceVolatility() {
 		t.Errorf("step %d: LastSnapshot.PriceVolatility mismatch: legacy=%v, compact=%v", step, legacyGame.LastSnapshot.PriceVolatility, cg.LastPriceVolatility())
@@ -82,8 +82,8 @@ func checkParity(t *testing.T, step int, pgs *engine.ProceduralGameState, cg *ga
 		t.Errorf("step %d: LastSnapshot.GridStability mismatch: legacy=%v, compact=%v", step, legacyGame.LastSnapshot.GridStability, cg.LastGridStability())
 	}
 
-	for i := 0; i < int(cg.PlayerCount()); i++ {
-		pStatus := cg.PlayerStatusI(i)
+	for i := 0; i < int(cg.NumPlayers); i++ {
+		pStatus := cg.PlayerStatus(i)
 		pMoney := cg.PlayerMoney(i)
 		pMix := cg.PlayerAssetMix(i)
 
@@ -129,8 +129,8 @@ func checkParity(t *testing.T, step int, pgs *engine.ProceduralGameState, cg *ga
 	}
 
 	// Takeover pool mix
-	if legacyGame.TakeoverPool != cg.TakeoverPoolMix() {
-		t.Errorf("step %d: TakeoverPoolMix mismatch: legacy=%+v, compact=%+v", step, legacyGame.TakeoverPool, cg.TakeoverPoolMix())
+	if legacyGame.TakeoverPool != cg.TakeoverPool {
+		t.Errorf("step %d: TakeoverPoolMix mismatch: legacy=%+v, compact=%+v", step, legacyGame.TakeoverPool, cg.TakeoverPool)
 	}
 }
 
@@ -242,7 +242,7 @@ func TestParity_Stress(t *testing.T) {
 	var seed uint64 = 42
 
 	for step := range 100 {
-		if cg.GameStatus() != core.GameStatusOngoing {
+		if cg.Status != core.GameStatusOngoing {
 			break
 		}
 

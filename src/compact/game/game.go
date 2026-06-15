@@ -25,7 +25,7 @@ type Game struct {
 	phase           phase
 	Status          core.GameStatus
 	Reason          core.LossCondition
-	round           int32
+	Round           int32
 	CarbonEmissions int32
 	NumPlayers      int
 	Players         [cparams.MaxPlayers]Player
@@ -73,7 +73,7 @@ func (g *Game) startBuildPhase() {
 			g.Players[i].resetModesForBuild()
 		}
 	}
-	g.round++
+	g.Round++
 }
 
 func (g *Game) haveBuildingPlayers() bool {
@@ -147,17 +147,7 @@ func (g *Game) ApplyPlayerAction(playerIndex int, actionCode int32) error {
 	return nil
 }
 
-// --- accessors (int32-friendly for future WASM) ---
-
-func (g *Game) GameStatus() core.GameStatus    { return g.Status }
-func (g *Game) LossReason() core.LossCondition { return g.Reason }
-func (g *Game) Round() int32                   { return g.round }
-func (g *Game) EmissionsCounter() int32        { return g.CarbonEmissions }
-func (g *Game) PlayerCount() int32             { return int32(g.NumPlayers) }
-
-func (g *Game) TakeoverPoolMix() assets.AssetMix { return g.TakeoverPool }
-
-func (g *Game) LastRoundAssetMix() assets.AssetMix { return g.LastSnapshot.AssetMix }
+// --- index-checked accessors ---
 
 func (g *Game) PlayerMoney(pi int) int32 {
 	if pi < 0 || pi >= g.NumPlayers {
@@ -166,11 +156,18 @@ func (g *Game) PlayerMoney(pi int) int32 {
 	return g.Players[pi].Money
 }
 
-func (g *Game) PlayerStatusI(pi int) core.PlayerStatus {
+func (g *Game) PlayerStatus(pi int) core.PlayerStatus {
 	if pi < 0 || pi >= g.NumPlayers {
 		return core.PlayerStatusLost
 	}
 	return g.Players[pi].Status
+}
+
+func (g *Game) PlayerLossReason(pi int) core.LossCondition {
+	if pi < 0 || pi >= g.NumPlayers {
+		return core.LossConditionNone
+	}
+	return g.Players[pi].Reason
 }
 
 func (g *Game) PlayerAssetMix(pi int) assets.AssetMix {

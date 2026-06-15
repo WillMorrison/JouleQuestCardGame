@@ -17,11 +17,11 @@ func TestNewGameFourPlayersStartingMix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if g.Round() != 1 {
-		t.Fatalf("Round = %d, want 1", g.Round())
+	if g.Round != 1 {
+		t.Fatalf("Round = %d, want 1", g.Round)
 	}
-	if g.PlayerCount() != 4 {
-		t.Fatalf("PlayerCount = %d", g.PlayerCount())
+	if g.NumPlayers != 4 {
+		t.Fatalf("PlayerCount = %d", g.NumPlayers)
 	}
 	wantFossil := int32(5) // params.Default map for 4 players
 	for i := 0; i < 4; i++ {
@@ -63,7 +63,7 @@ func TestApplyFinishedAdvancesWhenAllDone(t *testing.T) {
 	if g.phase != phaseBuild {
 		t.Fatalf("Phase = %d, want build after operate+startBuildPhase", g.phase)
 	}
-	if g.Round() != 2 {
-		t.Fatalf("Round = %d, want 2", g.Round())
+	if g.Round != 2 {
+		t.Fatalf("Round = %d, want 2", g.Round)
 	}
 }
