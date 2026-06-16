@@ -2,12 +2,11 @@ package main
 
 import (
 	"github.com/WillMorrison/JouleQuestCardGame/compact/game"
-	cparams "github.com/WillMorrison/JouleQuestCardGame/compact/params"
-	"github.com/WillMorrison/JouleQuestCardGame/params"
+	"github.com/WillMorrison/JouleQuestCardGame/compact/params"
 )
 
 var (
-	gParams cparams.CompactParams
+	gParams params.CompactParams = params.Default
 	gGame   game.Game
 )
 
@@ -15,7 +14,6 @@ func main() {}
 
 // This should be exported as _initialize when building a reactor module.
 func init() {
-	gParams, _ = cparams.FromLegacy(params.Default)
 	gGame.Reset(4, gParams)
 	gGame.SetRNGSeed(0)
 }
