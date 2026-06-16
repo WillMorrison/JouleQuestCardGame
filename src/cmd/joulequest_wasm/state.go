@@ -20,7 +20,7 @@ func init() {
 
 //go:wasmexport Reset
 func Reset(numPlayers int32) int32 {
-	if err := gGame.Reset(int(numPlayers), gParams); err != nil {
+	if err := gGame.Reset(numPlayers, gParams); err != nil {
 		return errCode(err)
 	}
 	return CodeOK
@@ -28,7 +28,7 @@ func Reset(numPlayers int32) int32 {
 
 //go:wasmexport ApplyAction
 func ApplyAction(playerIndex int32, actionInt int32) int32 {
-	if err := gGame.ApplyPlayerAction(int(playerIndex), actionInt); err != nil {
+	if err := gGame.ApplyPlayerAction(playerIndex, actionInt); err != nil {
 		return errCode(err)
 	}
 	return CodeOK

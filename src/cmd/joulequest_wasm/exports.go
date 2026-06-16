@@ -29,42 +29,42 @@ func CarbonEmissions() int32 {
 
 //go:wasmexport PlayerMoney
 func PlayerMoney(playerIndex int32) int32 {
-	return gGame.PlayerMoney(int(playerIndex))
+	return gGame.PlayerMoney(playerIndex)
 }
 
 //go:wasmexport PlayerStatus
 func PlayerStatus(playerIndex int32) int32 {
-	return int32(gGame.PlayerStatus(int(playerIndex)))
+	return int32(gGame.PlayerStatus(playerIndex))
 }
 
 //go:wasmexport PlayerLossReason
 func PlayerLossReason(playerIndex int32) int32 {
-	return int32(gGame.PlayerLossReason(int(playerIndex)))
+	return int32(gGame.PlayerLossReason(playerIndex))
 }
 
 //go:wasmexport PlayerRenewableAssets
 func PlayerRenewableAssets(playerIndex int32) int32 {
-	return int32(gGame.PlayerAssetMix(int(playerIndex)).Renewables)
+	return int32(gGame.PlayerAssetMix(playerIndex).Renewables)
 }
 
 //go:wasmexport PlayerBatteriesArbitrageAssets
 func PlayerBatteriesArbitrageAssets(playerIndex int32) int32 {
-	return int32(gGame.PlayerAssetMix(int(playerIndex)).BatteriesArbitrage)
+	return int32(gGame.PlayerAssetMix(playerIndex).BatteriesArbitrage)
 }
 
 //go:wasmexport PlayerBatteriesCapacityAssets
 func PlayerBatteriesCapacityAssets(playerIndex int32) int32 {
-	return int32(gGame.PlayerAssetMix(int(playerIndex)).BatteriesCapacity)
+	return int32(gGame.PlayerAssetMix(playerIndex).BatteriesCapacity)
 }
 
 //go:wasmexport PlayerFossilsWholesaleAssets
 func PlayerFossilsWholesaleAssets(playerIndex int32) int32 {
-	return int32(gGame.PlayerAssetMix(int(playerIndex)).FossilsWholesale)
+	return int32(gGame.PlayerAssetMix(playerIndex).FossilsWholesale)
 }
 
 //go:wasmexport PlayerFossilsCapacityAssets
 func PlayerFossilsCapacityAssets(playerIndex int32) int32 {
-	return int32(gGame.PlayerAssetMix(int(playerIndex)).FossilsCapacity)
+	return int32(gGame.PlayerAssetMix(playerIndex).FossilsCapacity)
 }
 
 //go:wasmexport TakeoverRenewableAssets

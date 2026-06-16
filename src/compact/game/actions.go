@@ -63,7 +63,7 @@ func assetTypeForAction(actionCode int32) assets.Type {
 	}
 }
 
-func (g *Game) possibleActionMask(pi int) uint32 {
+func (g *Game) PossibleActionMask(pi int32) uint32 {
 	if g.Status != core.GameStatusOngoing {
 		return 0
 	}
@@ -125,124 +125,35 @@ func (g *Game) possibleActionMask(pi int) uint32 {
 	return mask
 }
 
-func (g *Game) PossibleActionMask(pi int32) uint32 {
-	return g.possibleActionMask(int(pi))
-}
-
-func (g *Game) applyBuild(pi int, at assets.Type) {
-	p := &g.Players[pi]
-	switch at {
-	case assets.TypeRenewable:
-		p.Mix.Renewables++
-	case assets.TypeBattery:
-		p.Mix.BatteriesArbitrage++
-	case assets.TypeFossil:
-		p.Mix.FossilsWholesale++
-	}
-}
-
-func scrapOneFromPlayer(p *Player, at assets.Type) bool {
-	return scrapOneFromPool(&p.Mix, at)
-}
-
-func scrapOneFromPool(m *assets.AssetMix, at assets.Type) bool {
-	switch at {
-	case assets.TypeRenewable:
-		if m.Renewables > 0 {
-			m.Renewables--
-			return true
-		}
-	case assets.TypeBattery:
-		if m.BatteriesArbitrage > 0 {
-			m.BatteriesArbitrage--
-			return true
-		}
-		if m.BatteriesCapacity > 0 {
-			m.BatteriesCapacity--
-			return true
-		}
-	case assets.TypeFossil:
-		if m.FossilsWholesale > 0 {
-			m.FossilsWholesale--
-			return true
-		}
-		if m.FossilsCapacity > 0 {
-			m.FossilsCapacity--
-			return true
-		}
-	}
-	return false
-}
-
-func pledgeOne(p *Player, at assets.Type) bool {
-	m := &p.Mix
-	switch at {
-	case assets.TypeBattery:
-		if m.BatteriesArbitrage > 0 {
-			m.BatteriesArbitrage--
-			m.BatteriesCapacity++
-			return true
-		}
-	case assets.TypeFossil:
-		if m.FossilsWholesale > 0 {
-			m.FossilsWholesale--
-			m.FossilsCapacity++
-			return true
-		}
-	}
-	return false
-}
-
-func (g *Game) applyActionCode(pi int, actionCode int32) bool {
+func (g *Game) applyActionCode(pi int32, actionCode int32) {
 	p := &g.Players[pi]
 	var cost int32
 	switch actionCode {
 	case ActionFinished:
 		p.IsBuilding = false
-		return true
 	case ActionBuildRenewable, ActionBuildBattery, ActionBuildFossil:
 		at := assetTypeForAction(actionCode)
 		cost = g.Params.BuildCost(at)
 		p.Money -= cost
-		g.applyBuild(pi, at)
-		return true
+		p.Mix.AddOneAsset(at)
 	case ActionScrapRenewable, ActionScrapBattery, ActionScrapFossil:
 		at := assetTypeForAction(actionCode)
 		cost = g.Params.ScrapCost(at)
-		if !scrapOneFromPlayer(p, at) {
-			return false
-		}
 		p.Money -= cost
-		return true
+		p.Mix.RemoveOneAsset(at)
 	case ActionTakeoverRenewable, ActionTakeoverBattery, ActionTakeoverFossil:
 		at := assetTypeForAction(actionCode)
 		cost = g.Params.TakeoverCost(at)
-		if !scrapOneFromPool(&g.TakeoverPool, at) {
-			return false
-		}
 		p.Money -= cost
-		g.applyBuild(pi, at)
-		return true
+		p.Mix.TakeOneAssetFrom(at, &g.TakeoverPool)
 	case ActionTakeoverScrapRenewable, ActionTakeoverScrapBattery, ActionTakeoverScrapFossil:
 		at := assetTypeForAction(actionCode)
 		cost = g.Params.TakeoverCost(at)
-		if !scrapOneFromPool(&g.TakeoverPool, at) {
-			return false
-		}
 		p.Money -= cost
-		return true
-	case ActionPledgeBattery:
-		if !pledgeOne(p, assets.TypeBattery) {
-			return false
-		}
-		return true
-	case ActionPledgeFossil:
-		if !pledgeOne(p, assets.TypeFossil) {
-			return false
-		}
-		return true
-	default:
-		return false
+		g.TakeoverPool.RemoveOneAsset(at)
+	case ActionPledgeBattery, ActionPledgeFossil:
+		at := assetTypeForAction(actionCode)
+		p.Mix.PledgeOneAsset(at)
 	}
 }
 

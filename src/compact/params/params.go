@@ -102,7 +102,7 @@ func FromLegacy(p params.Params) (CompactParams, error) {
 }
 
 // StartingFossils returns the starting fossil count per player for n players (same lookup as legacy map).
-func (c CompactParams) StartingFossils(numPlayers int) int32 {
+func (c CompactParams) StartingFossils(numPlayers int32) int32 {
 	if numPlayers < 1 || numPlayers > MaxPlayerCount {
 		return 0
 	}

@@ -82,7 +82,7 @@ func checkParity(t *testing.T, step int, pgs *engine.ProceduralGameState, cg *ga
 		t.Errorf("step %d: LastSnapshot.GridStability mismatch: legacy=%v, compact=%v", step, legacyGame.LastSnapshot.GridStability, cg.LastSnapshot.GridStability)
 	}
 
-	for i := 0; i < int(cg.NumPlayers); i++ {
+	for i := int32(0); i < cg.NumPlayers; i++ {
 		pStatus := cg.PlayerStatus(i)
 		pMoney := cg.PlayerMoney(i)
 		pMix := cg.PlayerAssetMix(i)
@@ -91,7 +91,7 @@ func checkParity(t *testing.T, step int, pgs *engine.ProceduralGameState, cg *ga
 		var legacyMoney int
 		var legacyMix assets.AssetMix
 
-		if i < len(legacyGame.Players) {
+		if int(i) < len(legacyGame.Players) {
 			legacyStatus = legacyGame.Players[i].Status
 			legacyMoney = legacyGame.Players[i].Money
 			legacyMix = legacyGame.Players[i].Assets
@@ -114,9 +114,9 @@ func checkParity(t *testing.T, step int, pgs *engine.ProceduralGameState, cg *ga
 		// Check possible actions mask
 		legacyMask := uint32(0)
 		for _, la := range pgs.PossibleActions() {
-			if la.PlayerIndex == i {
+			if la.PlayerIndex == int(i) {
 				for code := int32(0); code <= game.ActionFinished; code++ {
-					if actionCodeToLegacy(i, code, legacyGame.Params) == la {
+					if actionCodeToLegacy(int(i), code, legacyGame.Params) == la {
 						legacyMask |= (1 << code)
 					}
 				}
@@ -147,7 +147,7 @@ func runParityScenario(t *testing.T, numPlayers int, legacyParams params.Params,
 		t.Fatal(err)
 	}
 
-	cg, err := game.NewGame(numPlayers, compactParams)
+	cg, err := game.NewGame(int32(numPlayers), compactParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func runParityScenario(t *testing.T, numPlayers int, legacyParams params.Params,
 		legacyAction := actionCodeToLegacy(step.playerIndex, step.actionCode, legacyParams)
 		pgs.ApplyPlayerAction(legacyAction)
 
-		err := cg.ApplyPlayerAction(step.playerIndex, step.actionCode)
+		err := cg.ApplyPlayerAction(int32(step.playerIndex), step.actionCode)
 		if err != nil {
 			t.Fatalf("step %d: %v", i, err)
 		}
@@ -271,7 +271,7 @@ func TestParity_Stress(t *testing.T) {
 
 		legacyAction := actionCodeToLegacy(chosen.playerIndex, chosen.actionCode, legacyParams)
 		pgs.ApplyPlayerAction(legacyAction)
-		err := cg.ApplyPlayerAction(chosen.playerIndex, chosen.actionCode)
+		err := cg.ApplyPlayerAction(int32(chosen.playerIndex), chosen.actionCode)
 		if err != nil {
 			t.Fatalf("step %d: %v", step, err)
 		}

@@ -26,7 +26,7 @@ type Game struct {
 	Reason          core.LossCondition
 	Round           int32
 	CarbonEmissions int32
-	NumPlayers      int
+	NumPlayers      int32
 	Players         [cparams.MaxPlayers]Player
 	TakeoverPool    assets.AssetMix
 	LastSnapshot    Snapshot
@@ -36,7 +36,7 @@ type Game struct {
 }
 
 // NewGame constructs a game in the first build phase (same entry behavior as engine.NewProceduralGame).
-func NewGame(numPlayers int, p cparams.CompactParams) (*Game, error) {
+func NewGame(numPlayers int32, p cparams.CompactParams) (*Game, error) {
 	var g Game
 	err := g.Reset(numPlayers, p)
 	if err != nil {
@@ -46,7 +46,7 @@ func NewGame(numPlayers int, p cparams.CompactParams) (*Game, error) {
 }
 
 // Reset resets the game to its initial state. The RNG is not reset
-func (g *Game) Reset(numPlayers int, p cparams.CompactParams) error {
+func (g *Game) Reset(numPlayers int32, p cparams.CompactParams) error {
 	if numPlayers < 2 || numPlayers > cparams.MaxPlayers {
 		return ErrInvalidPlayerCount
 	}
@@ -66,7 +66,7 @@ func (g *Game) Reset(numPlayers int, p cparams.CompactParams) error {
 
 	g.NumPlayers = numPlayers
 	for i := range g.Players {
-		if i < numPlayers {
+		if i < int(numPlayers) {
 			g.Players[i].Money = p.InitialCash
 			g.Players[i].Status = core.PlayerStatusActive
 			g.Players[i].Reason = core.LossConditionNone
@@ -88,7 +88,7 @@ func (g *Game) Reset(numPlayers int, p cparams.CompactParams) error {
 
 func (g *Game) startBuildPhase() {
 	g.phase = phaseBuild
-	for i := 0; i < g.NumPlayers; i++ {
+	for i := int32(0); i < g.NumPlayers; i++ {
 		if g.Players[i].Status == core.PlayerStatusActive {
 			g.Players[i].IsBuilding = true
 			g.Players[i].Mix.ResetAllCapacityPledges()
@@ -98,7 +98,7 @@ func (g *Game) startBuildPhase() {
 }
 
 func (g *Game) haveBuildingPlayers() bool {
-	for i := 0; i < g.NumPlayers; i++ {
+	for i := int32(0); i < g.NumPlayers; i++ {
 		if g.Players[i].Status == core.PlayerStatusActive && g.Players[i].IsBuilding {
 			return true
 		}
@@ -107,8 +107,8 @@ func (g *Game) haveBuildingPlayers() bool {
 }
 
 func (g *Game) anyPlayerHasPossibleActions() bool {
-	for i := 0; i < g.NumPlayers; i++ {
-		if g.possibleActionMask(i) != 0 {
+	for i := int32(0); i < g.NumPlayers; i++ {
+		if g.PossibleActionMask(i) != 0 {
 			return true
 		}
 	}
@@ -133,20 +133,15 @@ func (g *Game) runUntilBuildPhase() {
 }
 
 // ApplyPlayerAction applies an action for the given player index.
-func (g *Game) ApplyPlayerAction(playerIndex int, actionCode int32) error {
+func (g *Game) ApplyPlayerAction(playerIndex int32, actionCode int32) error {
 	if g.phase != phaseBuild {
 		return ErrNotBuildPhase
 	}
-	if playerIndex < 0 || playerIndex >= g.NumPlayers {
-		return ErrInvalidAction
-	}
-	mask := g.possibleActionMask(playerIndex)
+	mask := g.PossibleActionMask(playerIndex)
 	if !actionCodeAllowed(mask, actionCode) {
 		return ErrInvalidAction
 	}
-	if !g.applyActionCode(playerIndex, actionCode) {
-		return ErrInvalidAction
-	}
+	g.applyActionCode(playerIndex, actionCode)
 
 	if !g.anyPlayerHasPossibleActions() {
 		if actionCode == ActionFinished {
@@ -170,28 +165,28 @@ func (g *Game) ApplyPlayerAction(playerIndex int, actionCode int32) error {
 
 // --- index-checked accessors ---
 
-func (g *Game) PlayerMoney(pi int) int32 {
+func (g *Game) PlayerMoney(pi int32) int32 {
 	if pi < 0 || pi >= g.NumPlayers {
 		return 0
 	}
 	return g.Players[pi].Money
 }
 
-func (g *Game) PlayerStatus(pi int) core.PlayerStatus {
+func (g *Game) PlayerStatus(pi int32) core.PlayerStatus {
 	if pi < 0 || pi >= g.NumPlayers {
 		return core.PlayerStatusLost
 	}
 	return g.Players[pi].Status
 }
 
-func (g *Game) PlayerLossReason(pi int) core.LossCondition {
+func (g *Game) PlayerLossReason(pi int32) core.LossCondition {
 	if pi < 0 || pi >= g.NumPlayers {
 		return core.LossConditionNone
 	}
 	return g.Players[pi].Reason
 }
 
-func (g *Game) PlayerAssetMix(pi int) assets.AssetMix {
+func (g *Game) PlayerAssetMix(pi int32) assets.AssetMix {
 	if pi < 0 || pi >= g.NumPlayers {
 		return assets.AssetMix{}
 	}

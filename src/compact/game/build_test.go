@@ -10,7 +10,7 @@ import (
 	"github.com/WillMorrison/JouleQuestCardGame/params"
 )
 
-func mustNewGame(t *testing.T, numPlayers int, params params.Params) (cparams.CompactParams, *Game) {
+func mustNewGame(t *testing.T, numPlayers int32, params params.Params) (cparams.CompactParams, *Game) {
 	t.Helper()
 	cp, err := cparams.FromLegacy(params)
 	if err != nil {

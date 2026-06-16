@@ -24,7 +24,7 @@ func (g *Game) winConditionMet() bool {
 		return g.LastSnapshot.AssetMix.RenewablePenetration() >= int(g.Params.RenewablePenetration)
 	case params.WinConditionRuleLastFossilLoses:
 		var n int
-		for i := 0; i < g.NumPlayers; i++ {
+		for i := int32(0); i < g.NumPlayers; i++ {
 			if g.Players[i].Status == core.PlayerStatusActive && g.Players[i].Mix.AssetsOfType(assets.TypeFossil) > 0 {
 				n++
 			}
@@ -37,7 +37,7 @@ func (g *Game) winConditionMet() bool {
 
 func (g *Game) globalAssetMix() assets.AssetMix {
 	var m assets.AssetMix
-	for i := 0; i < g.NumPlayers; i++ {
+	for i := int32(0); i < g.NumPlayers; i++ {
 		m.Add(g.Players[i].Mix)
 	}
 	m.Add(g.TakeoverPool)
@@ -79,7 +79,7 @@ func (g *Game) runOperatePhase() {
 	}
 
 	var numActive int
-	for i := 0; i < g.NumPlayers; i++ {
+	for i := int32(0); i < g.NumPlayers; i++ {
 		p := &g.Players[i]
 		if p.Status != core.PlayerStatusActive {
 			continue
@@ -123,8 +123,8 @@ func (g *Game) runOperatePhase() {
 	g.Reason = core.LossConditionNone
 }
 
-func (g *Game) firstPlayerIndexWithFossil() int {
-	for i := 0; i < g.NumPlayers; i++ {
+func (g *Game) firstPlayerIndexWithFossil() int32 {
+	for i := int32(0); i < g.NumPlayers; i++ {
 		if g.Players[i].Mix.AssetsOfType(assets.TypeFossil) > 0 {
 			return i
 		}

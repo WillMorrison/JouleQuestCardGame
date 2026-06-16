@@ -25,7 +25,7 @@ func TestNewGameFourPlayersStartingMix(t *testing.T) {
 		t.Fatalf("PlayerCount = %d", g.NumPlayers)
 	}
 	wantFossil := int32(5) // params.Default map for 4 players
-	for i := 0; i < 4; i++ {
+	for i := int32(0); i < 4; i++ {
 		m := g.PlayerAssetMix(i)
 		if m.FossilsWholesale != int(wantFossil) || m.NumAssets() != int(wantFossil) {
 			t.Fatalf("player %d mix %+v, want %d wholesale fossils", i, m, wantFossil)
@@ -52,7 +52,7 @@ func TestApplyFinishedAdvancesWhenAllDone(t *testing.T) {
 	cp, _ := cparams.FromLegacy(params.Default)
 	g, _ := NewGame(2, cp)
 	// Both players immediately finish build (empty takeover pool with forced rule).
-	for _, pi := range []int{0, 1} {
+	for _, pi := range []int32{0, 1} {
 		if err := g.ApplyPlayerAction(pi, ActionFinished); err != nil {
 			t.Fatal(err)
 		}
