@@ -2,7 +2,7 @@
 package params
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
 	"github.com/WillMorrison/JouleQuestCardGame/core"
@@ -54,6 +54,8 @@ func int32FromPnL(t core.PnLTable) [4]int32 {
 	return [4]int32{int32(t[0]), int32(t[1]), int32(t[2]), int32(t[3])}
 }
 
+var NegativeAssetsError = errors.New("negative asset count")
+
 // FromLegacy builds CompactParams from the canonical params package value.
 func FromLegacy(p params.Params) (CompactParams, error) {
 	var c CompactParams
@@ -71,7 +73,7 @@ func FromLegacy(p params.Params) (CompactParams, error) {
 			continue
 		}
 		if v < 0 {
-			return CompactParams{}, fmt.Errorf("starting fossil assets for %d players: negative %d", n, v)
+			return CompactParams{}, NegativeAssetsError
 		}
 		c.StartingFossilAssetsPerPlayerCount[n] = int32(v)
 	}
