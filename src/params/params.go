@@ -96,7 +96,7 @@ type Params struct {
 }
 
 // defaultCost is a high cost, so that it is unlikely that a player will ever be able to afford it
-const defaultCost = 1 << 32
+const defaultCost = 1 << 30
 
 // The cost to build an asset of a given type
 func (p Params) BuildCost(at assets.Type) int {
