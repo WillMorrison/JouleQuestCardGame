@@ -1,14 +1,5 @@
 package main
 
-// Asset bucket indices for mix getters (player, takeover pool, last snapshot).
-const (
-	AssetBucketRenewables int32 = iota
-	AssetBucketBatteriesArbitrage
-	AssetBucketBatteriesCapacity
-	AssetBucketFossilsWholesale
-	AssetBucketFossilsCapacity
-)
-
 //go:wasmexport NumPlayers
 func NumPlayers() int32 {
 	return int32(gGame.NumPlayers)
