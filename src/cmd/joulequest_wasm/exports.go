@@ -1,5 +1,7 @@
 package main
 
+import "github.com/WillMorrison/JouleQuestCardGame/compact/game"
+
 //go:wasmexport NumPlayers
 func NumPlayers() int32 {
 	return int32(gGame.NumPlayers)
@@ -137,4 +139,9 @@ func CanPerformAction(playerIndex int32, actionInt int32) int32 {
 	} else {
 		return CodeInvalidAction
 	}
+}
+
+//go:wasmexport MaxAction
+func MaxAction() int32 {
+	return game.ActionFinished
 }
