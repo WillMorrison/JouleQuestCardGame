@@ -1,7 +1,6 @@
 package game
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/WillMorrison/JouleQuestCardGame/assets"
@@ -124,11 +123,11 @@ func TestAfterOperate_NewBuildRoundResetsIsBuildingForActivePlayers(t *testing.T
 	_, g := mustNewGame(t, 2, params.Default)
 
 	// act — both players finish build, triggering operate then startBuildPhase
-	if err := g.ApplyPlayerAction(0, ActionFinished); err != nil {
-		t.Fatal(err)
+	if err := g.ApplyPlayerAction(0, ActionFinished); err != CodeOK {
+		t.Fatal(err.Error())
 	}
-	if err := g.ApplyPlayerAction(1, ActionFinished); err != nil {
-		t.Fatal(err)
+	if err := g.ApplyPlayerAction(1, ActionFinished); err != CodeOK {
+		t.Fatal(err.Error())
 	}
 
 	// assert
@@ -215,8 +214,8 @@ func TestApplyPlayerAction_ForcedTakeoverWithNonemptyPool_FinishRejected(t *test
 	err := g.ApplyPlayerAction(0, ActionFinished)
 
 	// assert
-	if !errors.Is(err, ErrInvalidAction) {
-		t.Errorf("err = %v, want ErrInvalidAction", err)
+	if err != CodeInvalidAction {
+		t.Errorf("err = %v, want ErrInvalidAction", err.Error())
 	}
 	if !g.Players[0].IsBuilding {
 		t.Error("player should still be building after rejected finish")
@@ -246,8 +245,8 @@ func TestApplyPlayerAction_BuildRenewable_UpdatesMoneyAndMix(t *testing.T) {
 	g.Players[0].Mix = assets.AssetMix{FossilsWholesale: 5}
 
 	// act
-	if err := g.ApplyPlayerAction(0, ActionBuildRenewable); err != nil {
-		t.Fatal(err)
+	if err := g.ApplyPlayerAction(0, ActionBuildRenewable); err != CodeOK {
+		t.Fatal(err.Error())
 	}
 
 	// assert
@@ -269,8 +268,8 @@ func TestApplyPlayerAction_BuildBattery_UpdatesMoneyAndMix(t *testing.T) {
 	g.Players[0].Mix = assets.AssetMix{FossilsWholesale: 5}
 
 	// act
-	if err := g.ApplyPlayerAction(0, ActionBuildBattery); err != nil {
-		t.Fatal(err)
+	if err := g.ApplyPlayerAction(0, ActionBuildBattery); err != CodeOK {
+		t.Fatal(err.Error())
 	}
 
 	// assert
@@ -292,8 +291,8 @@ func TestApplyPlayerAction_BuildFossil_UpdatesMoneyAndMix(t *testing.T) {
 	g.Players[0].Mix = assets.AssetMix{FossilsWholesale: 5}
 
 	// act
-	if err := g.ApplyPlayerAction(0, ActionBuildFossil); err != nil {
-		t.Fatal(err)
+	if err := g.ApplyPlayerAction(0, ActionBuildFossil); err != CodeOK {
+		t.Fatal(err.Error())
 	}
 
 	// assert
@@ -315,8 +314,8 @@ func TestApplyPlayerAction_ScrapFossil_UpdatesMoneyAndMix(t *testing.T) {
 	g.Players[0].Mix = assets.AssetMix{FossilsWholesale: 5}
 
 	// act
-	if err := g.ApplyPlayerAction(0, ActionScrapFossil); err != nil {
-		t.Fatal(err)
+	if err := g.ApplyPlayerAction(0, ActionScrapFossil); err != CodeOK {
+		t.Fatal(err.Error())
 	}
 
 	// assert
@@ -342,8 +341,8 @@ func TestApplyPlayerAction_Takeover_UpdatesPlayerPoolAndMoney(t *testing.T) {
 	g.Players[0].Mix = assets.AssetMix{FossilsWholesale: 5}
 
 	// act
-	if err := g.ApplyPlayerAction(0, ActionTakeoverRenewable); err != nil {
-		t.Fatal(err)
+	if err := g.ApplyPlayerAction(0, ActionTakeoverRenewable); err != CodeOK {
+		t.Fatal(err.Error())
 	}
 
 	// assert
@@ -373,8 +372,8 @@ func TestApplyPlayerAction_TakeoverScrap_UpdatesPoolAndMoneyOnly(t *testing.T) {
 	g.Players[0].Mix = assets.AssetMix{FossilsWholesale: 5}
 
 	// act
-	if err := g.ApplyPlayerAction(0, ActionTakeoverScrapRenewable); err != nil {
-		t.Fatal(err)
+	if err := g.ApplyPlayerAction(0, ActionTakeoverScrapRenewable); err != CodeOK {
+		t.Fatal(err.Error())
 	}
 
 	// assert
@@ -398,8 +397,8 @@ func TestApplyPlayerAction_PledgeBattery_MovesArbitrageToCapacity(t *testing.T) 
 	g.Players[0].Mix = assets.AssetMix{FossilsWholesale: 5, BatteriesArbitrage: 3}
 
 	// act
-	if err := g.ApplyPlayerAction(0, ActionPledgeBattery); err != nil {
-		t.Fatal(err)
+	if err := g.ApplyPlayerAction(0, ActionPledgeBattery); err != CodeOK {
+		t.Fatal(err.Error())
 	}
 
 	// assert
@@ -415,8 +414,8 @@ func TestApplyPlayerAction_PledgeFossil_MovesWholesaleToCapacity(t *testing.T) {
 	g.Players[0].Mix = assets.AssetMix{FossilsWholesale: 5}
 
 	// act
-	if err := g.ApplyPlayerAction(0, ActionPledgeFossil); err != nil {
-		t.Fatal(err)
+	if err := g.ApplyPlayerAction(0, ActionPledgeFossil); err != CodeOK {
+		t.Fatal(err.Error())
 	}
 
 	// assert

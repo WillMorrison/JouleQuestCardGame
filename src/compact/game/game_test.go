@@ -53,8 +53,8 @@ func TestApplyFinishedAdvancesWhenAllDone(t *testing.T) {
 	g, _ := NewGame(2, cp)
 	// Both players immediately finish build (empty takeover pool with forced rule).
 	for _, pi := range []int32{0, 1} {
-		if err := g.ApplyPlayerAction(pi, ActionFinished); err != nil {
-			t.Fatal(err)
+		if err := g.ApplyPlayerAction(pi, ActionFinished); err != CodeOK {
+			t.Fatal(err.Error())
 		}
 	}
 	// runUntilBuildPhase runs one operate then startBuildPhase when still ongoing.

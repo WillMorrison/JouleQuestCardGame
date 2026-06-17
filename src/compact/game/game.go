@@ -39,20 +39,20 @@ type Game struct {
 func NewGame(numPlayers int32, p cparams.CompactParams) (*Game, error) {
 	var g Game
 	err := g.Reset(numPlayers, p)
-	if err != nil {
+	if err != CodeOK {
 		return nil, err
 	}
 	return &g, nil
 }
 
-// Reset resets the game to its initial state. The RNG is not reset
-func (g *Game) Reset(numPlayers int32, p cparams.CompactParams) error {
+// Reset resets the game to its initial state. The RNG is not reset. Returns an error code
+func (g *Game) Reset(numPlayers int32, p cparams.CompactParams) ErrCode {
 	if numPlayers < 2 || numPlayers > cparams.MaxPlayers {
-		return ErrInvalidPlayerCount
+		return CodeInvalidPlayerCount
 	}
-	startingFossils := int(p.StartingFossils(numPlayers))
+	startingFossils := p.StartingFossils(numPlayers)
 	if startingFossils <= 0 {
-		return ErrNoStartingFossils
+		return CodeInvalidPlayerCount
 	}
 
 	g.Params = p
@@ -71,7 +71,7 @@ func (g *Game) Reset(numPlayers int32, p cparams.CompactParams) error {
 			g.Players[i].Status = core.PlayerStatusActive
 			g.Players[i].Reason = core.LossConditionNone
 			g.Players[i].IsBuilding = true
-			g.Players[i].Mix = assets.AssetMix{FossilsWholesale: startingFossils}
+			g.Players[i].Mix = assets.AssetMix{FossilsWholesale: int(startingFossils)}
 		} else {
 			// Reset unused players to default values
 			g.Players[i].Money = 0
@@ -83,7 +83,7 @@ func (g *Game) Reset(numPlayers int32, p cparams.CompactParams) error {
 	}
 	g.LastSnapshot = snapshotFromGlobalMix(g.globalAssetMix())
 	g.startBuildPhase()
-	return nil
+	return CodeOK
 }
 
 func (g *Game) startBuildPhase() {
@@ -133,13 +133,10 @@ func (g *Game) runUntilBuildPhase() {
 }
 
 // ApplyPlayerAction applies an action for the given player index.
-func (g *Game) ApplyPlayerAction(playerIndex int32, actionCode int32) error {
-	if g.phase != phaseBuild {
-		return ErrNotBuildPhase
-	}
+func (g *Game) ApplyPlayerAction(playerIndex int32, actionCode int32) ErrCode {
 	mask := g.PossibleActionMask(playerIndex)
 	if !actionCodeAllowed(mask, actionCode) {
-		return ErrInvalidAction
+		return CodeInvalidAction
 	}
 	g.applyActionCode(playerIndex, actionCode)
 
@@ -160,7 +157,7 @@ func (g *Game) ApplyPlayerAction(playerIndex int32, actionCode int32) error {
 		}
 	}
 	g.runUntilBuildPhase()
-	return nil
+	return CodeOK
 }
 
 // --- index-checked accessors ---

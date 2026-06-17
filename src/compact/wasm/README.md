@@ -17,7 +17,7 @@ Building the . Requires TinyGo ≥ 0.34 (`//go:wasmexport` support).
 From `src/`:
 
 ```bash
-tinygo build -size short -gc=leaking -no-debug -scheduler=none -panic=trap -target=wasm-unknown \
+tinygo build -size short -gc=none -no-debug -scheduler=none -panic=trap -target=wasm-unknown \
   -o joulequest.wasm \
   ./compact/wasm
 ```

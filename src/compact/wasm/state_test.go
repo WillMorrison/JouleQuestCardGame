@@ -8,7 +8,7 @@ import (
 )
 
 func TestInitResetAndApplyAction(t *testing.T) {
-	if code := Reset(2); code != CodeOK {
+	if code := Reset(2); code != int32(cgame.CodeOK) {
 		t.Fatalf("Reset: %d", code)
 	}
 	if NumPlayers() != 2 {
@@ -26,7 +26,7 @@ func TestInitResetAndApplyAction(t *testing.T) {
 		t.Fatal("expected finished in mask")
 	}
 
-	if code := ApplyAction(0, cgame.ActionFinished); code != CodeOK {
+	if code := ApplyAction(0, cgame.ActionFinished); code != int32(cgame.CodeOK) {
 		t.Fatalf("ApplyAction finished: %d", code)
 	}
 	if PlayerMoney(0) <= 0 {
@@ -37,10 +37,10 @@ func TestInitResetAndApplyAction(t *testing.T) {
 func TestApplyActionErrors(t *testing.T) {
 	Reset(2)
 
-	if code := ApplyAction(99, 0); code != CodeInvalidAction {
+	if code := ApplyAction(99, 0); code != int32(cgame.CodeInvalidAction) {
 		t.Fatalf("bad index: %d", code)
 	}
-	if code := ApplyAction(0, 99); code != CodeInvalidAction {
+	if code := ApplyAction(0, 99); code != int32(cgame.CodeInvalidAction) {
 		t.Fatalf("bad action: %d", code)
 	}
 }

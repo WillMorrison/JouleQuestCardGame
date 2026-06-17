@@ -64,7 +64,7 @@ func assetTypeForAction(actionCode int32) assets.Type {
 }
 
 func (g *Game) PossibleActionMask(pi int32) uint32 {
-	if g.Status != core.GameStatusOngoing {
+	if g.Status != core.GameStatusOngoing || g.phase != phaseBuild {
 		return 0
 	}
 	if pi < 0 || pi >= g.NumPlayers {

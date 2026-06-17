@@ -135,9 +135,9 @@ func PossibleActionsMask(playerIndex int32) int32 {
 //go:wasmexport CanPerformAction
 func CanPerformAction(playerIndex int32, actionInt int32) int32 {
 	if gGame.PossibleActionMask(playerIndex)&(1<<actionInt) != 0 {
-		return CodeOK
+		return int32(game.CodeOK)
 	} else {
-		return CodeInvalidAction
+		return int32(game.CodeInvalidAction)
 	}
 }
 

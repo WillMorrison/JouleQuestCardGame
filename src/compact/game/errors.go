@@ -1,10 +1,23 @@
 package game
 
-import "errors"
+type ErrCode int32
 
-var (
-	ErrInvalidPlayerCount = errors.New("compact/game: invalid player count")
-	ErrNoStartingFossils  = errors.New("compact/game: no starting fossil count for player count in params")
-	ErrNotBuildPhase      = errors.New("compact/game: action only valid in build phase")
-	ErrInvalidAction      = errors.New("compact/game: action not allowed for player")
+const (
+	CodeOK ErrCode = iota
+	CodeInvalidPlayerCount
+	CodeInvalidAction
+	CodeUnknown
 )
+
+func (ec ErrCode) Error() string {
+	switch ec {
+	case CodeOK:
+		return "ok"
+	case CodeInvalidPlayerCount:
+		return "invalid player num"
+	case CodeInvalidAction:
+		return "invalid action"
+	default:
+		return "unknown error"
+	}
+}

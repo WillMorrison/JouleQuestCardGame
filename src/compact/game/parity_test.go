@@ -163,8 +163,8 @@ func runParityScenario(t *testing.T, numPlayers int, legacyParams params.Params,
 		pgs.ApplyPlayerAction(legacyAction)
 
 		err := cg.ApplyPlayerAction(int32(step.playerIndex), step.actionCode)
-		if err != nil {
-			t.Fatalf("step %d: %v", i, err)
+		if err != game.CodeOK {
+			t.Fatalf("step %d: %v", i, err.Error())
 		}
 
 		checkParity(t, i, pgs, cg)
@@ -272,8 +272,8 @@ func TestParity_Stress(t *testing.T) {
 		legacyAction := actionCodeToLegacy(chosen.playerIndex, chosen.actionCode, legacyParams)
 		pgs.ApplyPlayerAction(legacyAction)
 		err := cg.ApplyPlayerAction(int32(chosen.playerIndex), chosen.actionCode)
-		if err != nil {
-			t.Fatalf("step %d: %v", step, err)
+		if err != game.CodeOK {
+			t.Fatalf("step %d: %v", step, err.Error())
 		}
 
 		checkParity(t, step, pgs, cg)
