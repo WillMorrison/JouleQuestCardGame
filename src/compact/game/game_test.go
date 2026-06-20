@@ -103,7 +103,7 @@ func TestReset(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = g.Reset(2, cp)
-	if err != nil {
+	if err != CodeOK {
 		t.Fatal(err)
 	}
 
