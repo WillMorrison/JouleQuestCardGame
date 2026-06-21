@@ -8,32 +8,47 @@ import (
 	"log"
 	"strings"
 
+	"github.com/iancoleman/strcase"
 	"golang.org/x/tools/go/packages"
 )
 
 const (
-	Module   = "github.com/WillMorrison/JouleQuestCardGame"
-	WasmRoot = "github.com/WillMorrison/JouleQuestCardGame/compact/wasm"
 	LoadMode = packages.NeedName | packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo
 )
 
+type Int32Val struct{}
+
+func (v Int32Val) String() string {
+	return "int32"
+}
+
+func (v Int32Val) PythonType() string {
+	return "int"
+}
+
+func (v Int32Val) ClientValType() string {
+	return "ValType.I32"
+}
+
 type Arg struct {
-	Name     string
-	Type     types.BasicKind
-	TypeName string
+	Name string
+	Int32Val
 }
 
 func (a Arg) String() string {
-	return fmt.Sprintf("%s %s", a.Name, a.TypeName)
+	return fmt.Sprintf("%s %s", a.Name, a.Int32Val.String())
+}
+
+func (a Arg) SnakeName() string {
+	return strcase.ToSnake(a.Name)
 }
 
 type Result struct {
-	Type     types.BasicKind
-	TypeName string
+	Int32Val
 }
 
 func (r Result) String() string {
-	return r.TypeName
+	return r.Int32Val.String()
 }
 
 type WasmExportedFunc struct {
@@ -71,6 +86,10 @@ func (wef WasmExportedFunc) String() string {
 	}
 	b.WriteString(")")
 	return b.String()
+}
+
+func (wef WasmExportedFunc) SnakeName() string {
+	return strcase.ToSnake(wef.WasmExportName)
 }
 
 type Package struct {
@@ -163,7 +182,7 @@ func (p *Package) maybeAddWasmExportedFunc(decl ast.Decl) error {
 			if !ok || argType.Kind() != types.Int32 {
 				return fmt.Errorf("%s: type %s of arg %s to %s is not int32", p.fset.Position(fd.Pos()), argType.Name(), argVar.Name(), fd.Name.String())
 			}
-			wef.FuncArgs = append(wef.FuncArgs, Arg{Name: argVar.Name(), Type: argType.Kind(), TypeName: argType.Name()})
+			wef.FuncArgs = append(wef.FuncArgs, Arg{Name: argVar.Name(), Int32Val: Int32Val{}})
 		}
 	}
 
@@ -177,7 +196,7 @@ func (p *Package) maybeAddWasmExportedFunc(decl ast.Decl) error {
 		if !ok || resType.Kind() != types.Int32 {
 			return fmt.Errorf("%s: return type of %s is not int32, found %s", p.fset.Position(fd.Pos()), fd.Name.String(), resType.Name())
 		}
-		wef.FuncResult = append(wef.FuncResult, Result{Type: resType.Kind(), TypeName: resType.Name()})
+		wef.FuncResult = append(wef.FuncResult, Result{Int32Val{}})
 	}
 
 	p.Exports = append(p.Exports, wef)
