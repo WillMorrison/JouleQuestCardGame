@@ -7,7 +7,7 @@
 {{- end}}
 
 {{define "MethodDef" -}}
-    def {{.SnakeName}}(self{{range .FuncArgs}}, {{template "Arg" .}}{{end}}){{template "ReturnType" .FuncResult}}:
+    def {{.SnakeName}}(self{{if (ge (len .FuncArgs) 2)}}, *{{end}}{{range .FuncArgs}}, {{template "Arg" .}}{{end}}){{template "ReturnType" .FuncResult}}:
 {{- end}}
 
 {{define "MethodBody" -}}

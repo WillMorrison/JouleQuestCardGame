@@ -264,7 +264,7 @@ class JouleQuestInstance:
     def possible_actions_mask(self, player_index: int) -> int:
         return self._funcs["PossibleActionsMask"](self._store, player_index)
 
-    def can_perform_action(self, player_index: int, action_int: int) -> int:
+    def can_perform_action(self, *, player_index: int, action_int: int) -> int:
         return self._funcs["CanPerformAction"](self._store, player_index, action_int)
 
     def max_action(self) -> int:
@@ -273,7 +273,7 @@ class JouleQuestInstance:
     def reset(self, num_players: int) -> int:
         return self._funcs["Reset"](self._store, num_players)
 
-    def apply_action(self, player_index: int, action_int: int) -> int:
+    def apply_action(self, *, player_index: int, action_int: int) -> int:
         return self._funcs["ApplyAction"](self._store, player_index, action_int)
 
     def set_rng_seed(self, seed: int) -> None:
