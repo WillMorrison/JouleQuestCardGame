@@ -1,4 +1,4 @@
-package main
+package hub
 
 import (
 	"encoding/base64"
@@ -27,6 +27,7 @@ func encodeID(id int64) string {
 
 type ClientState int
 
+//go:generate go tool stringer -type=ClientState -trimprefix=ClientState
 const (
 	ClientStateInactive     ClientState = iota // disconnected
 	ClientStateUnassociated                    // connected but not associated with a game
@@ -37,8 +38,9 @@ const (
 
 type GameState int
 
+//go:generate go tool stringer -type=GameState -trimprefix=GameState
 const (
-	GameStateInvalid    GameState = iota // invalid (e.g. no players, missing required players)
+	GameStateBlocked    GameState = iota // cannnot progress due to missing required players
 	GameStateJoinable                    // joinable by players in the lobby
 	GameStateFull                        // full and cannot be joined
 	GameStateInProgress                  // in progress and cannot be joined
@@ -56,7 +58,7 @@ type Client struct {
 	ID                int64
 	Name              string
 	State             ClientState
-	gameID            int64     // the ID of the game the client is associated with, if any.
+	GameID            int64     // the ID of the game the client is associated with, if any.
 	index             int       // the index of the client in the game, if any.
 	disconnectedSince time.Time // the time the client disconnected, if any.
 }
@@ -135,7 +137,7 @@ func (h *Hub) clientsInGame(gameID int64) []int64 {
 	for _, client := range h.clients {
 		switch client.State {
 		case ClientStateAssociated, ClientStateReady, ClientStatePlaying:
-			if client.gameID == gameID {
+			if client.GameID == gameID {
 				clients = append(clients, client.ID)
 			}
 		}
@@ -150,7 +152,7 @@ func (h *Hub) startGameIfAllClientsReady(game *Game) bool {
 	}
 	clientsInGame := make([]*Client, 0)
 	for _, client := range h.clients {
-		if client.gameID != game.ID {
+		if client.GameID != game.ID {
 			continue
 		}
 		if client.State != ClientStateReady {
@@ -174,23 +176,24 @@ func (h *Hub) startGameIfAllClientsReady(game *Game) bool {
 	game.game = pg
 	for i, client := range clientsInGame {
 		client.State = ClientStatePlaying
-		client.gameID = game.ID
+		client.GameID = game.ID
 		client.index = i
 	}
 	return true
 }
 
-// maybeBlockGameOnExitingClient checks if the game should be blocked from progressing by the client exiting. Returns true if the game was blocked, false otherwise. The lock should be held by the caller.
+// maybeBlockGameOnExitingClient checks if the game should be blocked from progressing by the client exiting.
+// Returns true if the game was blocked, false otherwise. The lock should be held by the caller.
 func (h *Hub) maybeBlockGameOnExitingClient(client Client, game *Game) (blocked bool) {
-	if client.State != ClientStatePlaying || client.gameID != game.ID {
+	if client.State != ClientStatePlaying || client.GameID != game.ID {
 		return false
 	}
 	if game.State == GameStateInProgress && game.game.Game().Status == core.GameStatusOngoing && game.game.Game().Players[client.index].Status == core.PlayerStatusActive {
-		// Game is blocked from progressing by this player leaving, mark it as invalid
-		game.State = GameStateInvalid
+		// Game is blocked from progressing by this player leaving
+		game.State = GameStateBlocked
 		blocked = true
 	}
-	if len(h.clientsInGame(game.ID)) == 0 {
+	if len(h.clientsInGame(game.ID)) == 1 {
 		// last player left, delete the game
 		delete(h.games, game.ID)
 		return false
@@ -198,13 +201,10 @@ func (h *Hub) maybeBlockGameOnExitingClient(client Client, game *Game) (blocked 
 	return
 }
 
-// maybeUnblockGameOnReturningClient checks if the game was unblocked from progressing by the client returning. Returns true if the game was unblocked, false otherwise. The lock should be held by the caller.
-func (h *Hub) maybeUnblockGameOnReturningClient(client Client) bool {
-	if client.State != ClientStatePlaying || client.gameID == noID {
-		return false
-	}
-	game, ok := h.getGameInState(client.gameID, GameStateInvalid)
-	if !ok {
+// maybeUnblockGameOnReturningClient checks if the game was unblocked from progressing by the client returning.
+// Returns true if the game was unblocked, false otherwise. The lock should be held by the caller.
+func (h *Hub) maybeUnblockGameOnReturningClient(client Client, game *Game) bool {
+	if game.State != GameStateBlocked {
 		return false
 	}
 	if game.game.Game().Status != core.GameStatusOngoing || game.game.Game().Players[client.index].Status != core.PlayerStatusActive {
@@ -213,7 +213,7 @@ func (h *Hub) maybeUnblockGameOnReturningClient(client Client) bool {
 	// Get the set of clients connected in this game
 	var clientsInGame []*Client
 	for _, client := range h.clients {
-		if client.gameID == game.ID && client.State == ClientStatePlaying {
+		if client.GameID == game.ID && client.State == ClientStatePlaying {
 			clientsInGame = append(clientsInGame, client)
 		}
 	}
@@ -231,6 +231,29 @@ func (h *Hub) maybeUnblockGameOnReturningClient(client Client) bool {
 	return true
 }
 
+// DoGarbageCollection removes games with no clients and clients which have been disconnected for 30 minutes
+func (h *Hub) DoGarbageCollection() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	gamesWithClients := make(map[int64]struct{})
+	for clientID, client := range h.clients {
+		switch client.State {
+		case ClientStateAssociated, ClientStateReady, ClientStatePlaying:
+			gamesWithClients[client.GameID] = struct{}{}
+		case ClientStateInactive:
+			if time.Since(client.disconnectedSince) > 30*time.Minute {
+				delete(h.clients, clientID)
+			}
+		}
+	}
+
+	for gameID, _ := range h.games {
+		if _, ok := gamesWithClients[gameID]; !ok {
+			delete(h.games, gameID)
+		}
+	}
+}
+
 // GetNotifyChan returns a new channel to notify when events occur. The ID is used to identify the channel for later removal.
 func (h *Hub) GetNotifyChan() (int64, <-chan Notification) {
 	h.mu.Lock()
@@ -245,6 +268,9 @@ func (h *Hub) GetNotifyChan() (int64, <-chan Notification) {
 func (h *Hub) RemoveNotifyChan(id int64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if nc, ok := h.notifySinks[id]; ok {
+		close(nc)
+	}
 	delete(h.notifySinks, id)
 }
 
@@ -257,7 +283,7 @@ func (h *Hub) NewClient(name string) int64 {
 		ID:     rand.Int63(),
 		Name:   name,
 		State:  ClientStateUnassociated,
-		gameID: -1,
+		GameID: -1,
 		index:  -1,
 	}
 	h.clients[client.ID] = client
@@ -283,7 +309,7 @@ func (h *Hub) AssociateClientToNewGame(clientID int64) bool {
 	h.games[gameID] = game
 
 	client.State = ClientStateAssociated
-	client.gameID = gameID
+	client.GameID = gameID
 	client.index = -1
 
 	h.broadcast(Notification{Event: EventLobbyStateChange})
@@ -303,7 +329,7 @@ func (h *Hub) AssociateClientToGame(clientID int64, gameID int64) bool {
 		return false
 	}
 
-	client.gameID = gameID
+	client.GameID = gameID
 	client.index = -1
 	client.State = ClientStateAssociated
 
@@ -325,19 +351,18 @@ func (h *Hub) UnassociateClient(clientID int64) bool {
 	if !ok {
 		return false
 	}
-	game, ok := h.getGameInState(client.gameID, GameStateJoinable, GameStateFull)
+	game, ok := h.getGameInState(client.GameID, GameStateJoinable, GameStateFull)
 	if !ok {
 		return false
 	}
 
 	// Update
 	client.State = ClientStateUnassociated
-	client.gameID = -1
+	client.GameID = -1
 	client.index = -1
 
 	if numLeft := len(h.clientsInGame(game.ID)); numLeft == 0 {
 		// last clients left, delete the game
-		game.State = GameStateInvalid
 		delete(h.games, game.ID)
 	} else {
 		if game.State == GameStateFull && numLeft < maxPlayers {
@@ -363,7 +388,7 @@ func (h *Hub) ReadyClient(clientID int64) bool {
 	if !ok {
 		return false
 	}
-	game, ok := h.getGameInState(client.gameID, GameStateJoinable, GameStateFull)
+	game, ok := h.getGameInState(client.GameID, GameStateJoinable, GameStateFull)
 	if !ok {
 		return false
 	}
@@ -402,7 +427,7 @@ func (h *Hub) ExitOngoingGame(clientID int64) bool {
 	if !ok {
 		return false
 	}
-	game, ok := h.getGameInState(client.gameID, GameStateInProgress, GameStateInvalid)
+	game, ok := h.getGameInState(client.GameID, GameStateInProgress, GameStateBlocked)
 	if !ok {
 		return false
 	}
@@ -412,13 +437,14 @@ func (h *Hub) ExitOngoingGame(clientID int64) bool {
 	h.broadcast(Notification{Event: EventGameStateChange, ForID: game.ID})
 
 	client.State = ClientStateUnassociated
-	client.gameID = -1
+	client.GameID = -1
 	client.index = -1
 	h.broadcast(Notification{Event: EventLobbyStateChange})
 
 	return true
 }
 
+// ClientDisconnected should be called whenever a client disconnects
 func (h *Hub) ClientDisconnected(clientID int64) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -430,11 +456,11 @@ func (h *Hub) ClientDisconnected(clientID int64) bool {
 	switch client.State {
 	case ClientStateUnassociated, ClientStateAssociated, ClientStateReady:
 		// Update
-		client.gameID = -1
+		client.GameID = -1
 		client.index = -1
 		h.broadcast(Notification{Event: EventLobbyStateChange})
 	case ClientStatePlaying:
-		game, ok := h.getGameInState(client.gameID, GameStateInProgress, GameStateInvalid)
+		game, ok := h.getGameInState(client.GameID, GameStateInProgress, GameStateBlocked)
 		if !ok {
 			return false
 		}
@@ -451,6 +477,8 @@ func (h *Hub) ClientDisconnected(clientID int64) bool {
 	return true
 }
 
+// ClientReconnected should be called when a client reconnects and provides its ID.
+// Returns whether the client ID is still valid. If false, call NewClient()
 func (h *Hub) ClientReconnected(clientID int64) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -461,15 +489,70 @@ func (h *Hub) ClientReconnected(clientID int64) bool {
 	}
 
 	// Update
-	if client.gameID == noID {
+	h.broadcast(Notification{Event: EventClientStateChange, ForID: client.ID})
+	game, ok := h.getGameInState(client.GameID, GameStateInProgress, GameStateBlocked)
+	if !ok {
 		client.State = ClientStateUnassociated
-		client.gameID = -1
+		client.GameID = noID
 		client.index = -1
 		h.broadcast(Notification{Event: EventLobbyStateChange})
-	} else {
-		client.State = ClientStatePlaying
-		h.maybeUnblockGameOnReturningClient(*client)
-		h.broadcast(Notification{Event: EventGameStateChange, ForID: client.gameID})
+		return true
 	}
+	client.State = ClientStatePlaying
+	h.maybeUnblockGameOnReturningClient(*client, game)
+	h.broadcast(Notification{Event: EventGameStateChange, ForID: client.GameID})
 	return true
+}
+
+// LookupGameStateForClient returns the game state that the client is currently playing, or nil if no such game exists.
+func (h *Hub) LookupGameStateForClient(clientID int64) *engine.ProceduralGameState {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	// Lookup and Validate
+	client, ok := h.getClientInState(clientID, ClientStatePlaying)
+	if !ok {
+		return nil
+	}
+	game, ok := h.getGameInState(client.GameID, GameStateInProgress, GameStateBlocked)
+	if !ok {
+		return nil
+	}
+
+	return game.game
+}
+
+// LookupClient returns the client with the given ID, and whether that client was found.
+func (h *Hub) LookupClient(clientID int64) (Client, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	client, ok := h.clients[clientID]
+	if !ok {
+		return Client{}, false
+	}
+	return *client, true
+}
+
+// LookupGame returns the game with the given ID, and whether that game was found.
+func (h *Hub) LookupGame(gameID int64) (Game, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	game, ok := h.games[gameID]
+	if !ok {
+		return Game{}, false
+	}
+	return *game, true
+
+}
+
+// LookupLobbyGames returns the set of IDs of games which are currently in the lobby
+func (h *Hub) LookupLobbyGames() []int64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var gameIDs []int64
+	for gameID, game := range h.games {
+		if game.State == GameStateJoinable || game.State == GameStateFull {
+			gameIDs = append(gameIDs, gameID)
+		}
+	}
+	return gameIDs
 }
