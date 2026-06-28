@@ -10,9 +10,9 @@ WASM **reactor** module exposing the compact game engine to Python (wasmtime) vi
 4. Read state via scalar getters (`GameStatus`, `PlayerMoney`, `PossibleActionsMask`, etc.).
 5. Step with `ApplyAction(playerIndex, actionInt)` (action ints 0–14, same encoding as PettingZoo `PlayerActionToInt`).
 
-## Build (TinyGo artifact)
+## Build WASM binary
 
-Building the . Requires TinyGo ≥ 0.34 (`//go:wasmexport` support).
+Requires TinyGo ≥ 0.34 (`//go:wasmexport` support).
 
 From `src/`:
 
@@ -23,6 +23,14 @@ tinygo build -size short -gc=none -no-debug -scheduler=none -panic=trap -target=
 ```
 
 `wasm-unknown` is a reactor-style target without WASI: the host keeps the module loaded and calls exports repeatedly.
+
+## Python Bindings
+
+To regenerate the Python bindings, run the following from `src/`:
+
+```sh
+go run ./cmd/wasm_pybindgen/ --out_dir '../rl_agent/wasm_api_client/'
+```
 
 ## Tests 
 

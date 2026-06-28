@@ -1,0 +1,29 @@
+{{define "ValTypesTuple" -}}
+    {{if (eq (len .) 0) -}}
+        ()
+    {{- else if (eq (len .) 1) -}}
+        ({{with (index . 0)}}{{.ClientValType}}{{end}},)
+    {{- else -}}
+        ({{- range $i, $arg := .}}{{if (ne $i 0)}}, {{end}}{{.ClientValType}}{{end}})
+    {{- end}}
+{{- end}}
+
+{{define "FuncType"}}        FuncType(
+            {{printf "%q" .WasmExportName}},
+            params={{template "ValTypesTuple" .FuncArgs}},
+            result={{template "ValTypesTuple" .FuncResult}},
+        ),
+{{- end}}
+
+{{define "ExpectedExports" -}}
+_EXPECTED_EXPORTS: Final[frozenset[FuncType]] = frozenset(
+    (
+        FuncType(
+            "_initialize",
+            params=(),
+            result=(),
+        ),
+{{range .Exports}}{{template "FuncType" .}}
+{{end}}    )
+)
+{{- end}}

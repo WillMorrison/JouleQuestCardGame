@@ -12,6 +12,7 @@ dependencies = [
     "python-dateutil==2.8.0",
     "tianshou>=0.5.1",
     "torch>=2.11.0",
+    "wasmtime>=45.0.0",
 ]
 
 [tool.uv]
@@ -21,5 +22,6 @@ environments = [
 
 [dependency-groups]
 dev = [
+    "ruff>=0.15.18",
     "tensorboard>=2.20.0",
 ]

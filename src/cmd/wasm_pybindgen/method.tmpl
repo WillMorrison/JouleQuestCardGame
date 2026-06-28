@@ -1,0 +1,21 @@
+{{define "Arg" -}}{{.SnakeName}}: {{.PythonType}}{{- end}}
+
+{{define "ReturnType" -}}
+    {{if (eq (len .) 0)}} -> None
+    {{- else if (eq (len .) 1)}} -> {{with (index . 0)}}{{.PythonType}}{{end}}
+    {{- end}}
+{{- end}}
+
+{{define "MethodDef" -}}
+    def {{.SnakeName}}(self{{if (ge (len .FuncArgs) 2)}}, *{{end}}{{range .FuncArgs}}, {{template "Arg" .}}{{end}}){{template "ReturnType" .FuncResult}}:
+{{- end}}
+
+{{define "MethodBody" -}}
+    return self._funcs[{{printf "%q" .WasmExportName}}](self._store{{range .FuncArgs}}, {{.SnakeName}}{{end}})
+{{- end}}
+
+{{define "Method"}}
+
+    {{template "MethodDef" .}}
+        {{template "MethodBody" .}}
+{{- end}}
