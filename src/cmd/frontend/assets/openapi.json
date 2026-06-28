@@ -1,0 +1,761 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "JouleQuest Frontend API",
+        "version": "1.0",
+        "description": "Multi-client game frontend JSON API.\n\nReal-time updates use Server-Sent Events on GET /events (not described as OpenAPI operations). The browser EventSource API connects with credentials so the jq_session cookie is sent.\n\nSSE wire format (text/event-stream):\n- event: lobby-changed\\ndata: {}\\n\\n — lobby seat list or client association changed; refetch GET /api/lobby.\n- event: game-changed\\ndata: {\"gameId\":\"<id>\"}\\n\\n — in-progress game state changed; refetch GET /api/g/{gameId}/view when playing that game.\n- event: client-changed\\ndata: {\"clientId\":\"<id>\"}\\n\\n — connection state for a client changed.\n\nOn the first GET /events without a jq_session cookie, the server creates a client, sets Set-Cookie: jq_session=<clientId>, and keeps the same client ID across SSE reconnections until garbage collection."
+    },
+    "servers": [
+        {
+            "url": "http://127.0.0.1:0",
+            "description": "Local frontend server (port chosen at runtime)"
+        }
+    ],
+    "components": {
+        "securitySchemes": {
+            "sessionCookie": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": "jq_session",
+                "description": "URL-safe base64 client ID. Issued on first GET /events; sent automatically on same-origin fetch and EventSource requests."
+            },
+            "xsrfHeader": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "X-XSRF-Token",
+                "description": "Anti-CSRF token from the XSRFToken field of GET /api/g/{gameId}/view. Required for POST /api/g/{gameId}/action."
+            }
+        },
+        "schemas": {
+            "Error": {
+                "type": "object",
+                "required": [
+                    "error"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "error": {
+                        "description": "The error message",
+                        "type": "string"
+                    }
+                }
+            },
+            "AssetMix": {
+                "type": "object",
+                "required": [
+                    "Renewables",
+                    "BatteriesArbitrage",
+                    "BatteriesCapacity",
+                    "FossilsWholesale",
+                    "FossilsCapacity"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "Renewables": {
+                        "type": "integer",
+                        "default": 0
+                    },
+                    "BatteriesArbitrage": {
+                        "type": "integer",
+                        "default": 0
+                    },
+                    "BatteriesCapacity": {
+                        "type": "integer",
+                        "default": 0
+                    },
+                    "FossilsWholesale": {
+                        "type": "integer",
+                        "default": 0
+                    },
+                    "FossilsCapacity": {
+                        "type": "integer",
+                        "default": 0
+                    }
+                }
+            },
+            "PlayerAction": {
+                "type": "object",
+                "required": [
+                    "Type",
+                    "PlayerIndex"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "Type": {
+                        "type": "string",
+                        "enum": [
+                            "BuildAsset",
+                            "ScrapAsset",
+                            "TakeoverAsset",
+                            "TakeoverScrapAsset",
+                            "PledgeCapacity",
+                            "Finished"
+                        ]
+                    },
+                    "PlayerIndex": {
+                        "type": "integer"
+                    },
+                    "AssetType": {
+                        "type": "string",
+                        "enum": [
+                            "Renewable",
+                            "Battery",
+                            "Fossil"
+                        ]
+                    },
+                    "Cost": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "Player": {
+                "type": "object",
+                "required": [
+                    "Status",
+                    "Money",
+                    "Assets"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "Status": {
+                        "type": "string",
+                        "enum": [
+                            "Active",
+                            "Lost"
+                        ]
+                    },
+                    "Reason": {
+                        "type": "string",
+                        "enum": [
+                            "None",
+                            "GridUnstable",
+                            "InsufficientGeneration",
+                            "CarbonEmissionsExceeded",
+                            "NoActivePlayers",
+                            "UnownedTakeoverAssets",
+                            "LastPlayerWithFossilAssets",
+                            "InsufficientFunds"
+                        ]
+                    },
+                    "Money": {
+                        "type": "integer"
+                    },
+                    "Assets": {
+                        "$ref": "#/components/schemas/AssetMix"
+                    }
+                }
+            },
+            "Game": {
+                "type": "object",
+                "required": [
+                    "Status",
+                    "Reason",
+                    "Round",
+                    "EmissionsCounter",
+                    "LastRoundSnapshot",
+                    "Players",
+                    "TakeoverPool"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "Status": {
+                        "type": "string",
+                        "enum": [
+                            "Ongoing",
+                            "Win",
+                            "Loss"
+                        ]
+                    },
+                    "Reason": {
+                        "type": "string",
+                        "default": "None",
+                        "enum": [
+                            "None",
+                            "GridUnstable",
+                            "InsufficientGeneration",
+                            "CarbonEmissionsExceeded",
+                            "NoActivePlayers",
+                            "UnownedTakeoverAssets"
+                        ]
+                    },
+                    "Round": {
+                        "type": "integer"
+                    },
+                    "EmissionsCounter": {
+                        "type": "integer"
+                    },
+                    "LastRoundSnapshot": {
+                        "description": "Summary statistics from the last round of the game",
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "AssetMix",
+                            "PriceVolatility",
+                            "GridStability"
+                        ],
+                        "properties": {
+                            "AssetMix": {
+                                "$ref": "#/components/schemas/AssetMix"
+                            },
+                            "PriceVolatility": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 3
+                            },
+                            "GridStability": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 3
+                            }
+                        }
+                    },
+                    "Players": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Player"
+                        }
+                    },
+                    "TakeoverPool": {
+                        "$ref": "#/components/schemas/AssetMix"
+                    }
+                }
+            },
+            "ClientState": {
+                "type": "string",
+                "enum": [
+                    "Inactive",
+                    "Unassociated",
+                    "Associated",
+                    "Ready",
+                    "Playing"
+                ]
+            },
+            "GameState": {
+                "type": "string",
+                "enum": [
+                    "Blocked",
+                    "Joinable",
+                    "Full",
+                    "InProgress"
+                ]
+            },
+            "ClientSnapshot": {
+                "type": "object",
+                "required": [
+                    "ID",
+                    "Name",
+                    "State"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "ID": {
+                        "description": "Client ID (same value as jq_session cookie)",
+                        "type": "string"
+                    },
+                    "Name": {
+                        "type": "string"
+                    },
+                    "State": {
+                        "$ref": "#/components/schemas/ClientState"
+                    },
+                    "GameID": {
+                        "description": "Game the client is associated with, if any",
+                        "type": "string"
+                    }
+                }
+            },
+            "LobbySeat": {
+                "type": "object",
+                "required": [
+                    "Name",
+                    "State"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "Name": {
+                        "type": "string"
+                    },
+                    "State": {
+                        "description": "Associated or Ready for lobby seats",
+                        "type": "string",
+                        "enum": [
+                            "Associated",
+                            "Ready"
+                        ]
+                    }
+                }
+            },
+            "LobbyGame": {
+                "type": "object",
+                "required": [
+                    "ID",
+                    "State",
+                    "Seats"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "ID": {
+                        "type": "string"
+                    },
+                    "State": {
+                        "$ref": "#/components/schemas/GameState"
+                    },
+                    "Seats": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/LobbySeat"
+                        }
+                    }
+                }
+            },
+            "LobbyView": {
+                "type": "object",
+                "required": [
+                    "Client",
+                    "Games"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "Client": {
+                        "$ref": "#/components/schemas/ClientSnapshot"
+                    },
+                    "Games": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/LobbyGame"
+                        }
+                    }
+                }
+            },
+            "CreateGameResponse": {
+                "type": "object",
+                "required": [
+                    "GameID"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "GameID": {
+                        "type": "string"
+                    }
+                }
+            },
+            "GameView": {
+                "type": "object",
+                "required": [
+                    "GameID",
+                    "MyPlayerIndex",
+                    "XSRFToken",
+                    "Game",
+                    "PossibleActions"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "GameID": {
+                        "type": "string"
+                    },
+                    "MyPlayerIndex": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "XSRFToken": {
+                        "description": "Send this value in the X-XSRF-Token header when posting actions for this game view",
+                        "type": "string"
+                    },
+                    "Game": {
+                        "$ref": "#/components/schemas/Game"
+                    },
+                    "PossibleActions": {
+                        "description": "Legal actions for the authenticated client only",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PlayerAction"
+                        }
+                    }
+                }
+            },
+            "SetClientNameRequest": {
+                "type": "object",
+                "required": [
+                    "Name"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "Name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                    }
+                }
+            }
+        },
+        "responses": {
+            "errorResponse": {
+                "description": "Response describing an error",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Error"
+                        }
+                    }
+                }
+            }
+        },
+        "parameters": {
+            "GameID": {
+                "name": "gameId",
+                "in": "path",
+                "required": true,
+                "description": "URL-safe base64 game ID",
+                "schema": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "paths": {
+        "/api/lobby": {
+            "get": {
+                "description": "Lobby snapshot for the authenticated client and joinable games",
+                "security": [
+                    {
+                        "sessionCookie": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LobbyView"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/errorResponse"
+                    }
+                }
+            }
+        },
+        "/api/client/name": {
+            "post": {
+                "description": "Set the display name for the authenticated client (must be Unassociated or reconnecting)",
+                "security": [
+                    {
+                        "sessionCookie": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SetClientNameRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Name updated"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/errorResponse"
+                    }
+                }
+            }
+        },
+        "/api/lobby/games": {
+            "post": {
+                "description": "Create a new joinable game and associate the authenticated client as its first seat",
+                "security": [
+                    {
+                        "sessionCookie": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Game created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CreateGameResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/errorResponse"
+                    }
+                }
+            }
+        },
+        "/api/lobby/games/{gameId}/join": {
+            "post": {
+                "description": "Join an existing joinable game",
+                "security": [
+                    {
+                        "sessionCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/GameID"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Joined"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/errorResponse"
+                    }
+                }
+            }
+        },
+        "/api/lobby/games/{gameId}/leave": {
+            "post": {
+                "description": "Leave a joinable game lobby seat and return to Unassociated",
+                "security": [
+                    {
+                        "sessionCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/GameID"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Left lobby"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/errorResponse"
+                    }
+                }
+            }
+        },
+        "/api/lobby/games/{gameId}/ready": {
+            "post": {
+                "description": "Mark the authenticated client ready in a lobby game. Starts the game when all seats are ready and at least two players are seated.",
+                "security": [
+                    {
+                        "sessionCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/GameID"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Ready state updated; game may have started"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/errorResponse"
+                    }
+                }
+            }
+        },
+        "/api/lobby/games/{gameId}/unready": {
+            "post": {
+                "description": "Return the authenticated client from Ready to Associated in a lobby game",
+                "security": [
+                    {
+                        "sessionCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/GameID"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Unready"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/errorResponse"
+                    }
+                }
+            }
+        },
+        "/api/g/{gameId}/view": {
+            "get": {
+                "description": "Player-scoped in-progress game view for the authenticated client",
+                "security": [
+                    {
+                        "sessionCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/GameID"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GameView"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/errorResponse"
+                    }
+                }
+            }
+        },
+        "/api/g/{gameId}/action": {
+            "post": {
+                "description": "Submit a build-phase action for the authenticated client. Server validates PlayerIndex against the session. Returns no body; clients refetch via SSE notification.",
+                "security": [
+                    {
+                        "sessionCookie": [],
+                        "xsrfHeader": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/GameID"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PlayerAction"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Action accepted"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/errorResponse"
+                    }
+                }
+            }
+        },
+        "/api/g/{gameId}/exit": {
+            "post": {
+                "description": "Leave an in-progress game and return to the lobby as Unassociated",
+                "security": [
+                    {
+                        "sessionCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/GameID"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Left game"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/errorResponse"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/errorResponse"
+                    }
+                }
+            }
+        }
+    }
+}
