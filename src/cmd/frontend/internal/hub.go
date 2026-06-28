@@ -49,9 +49,9 @@ const (
 type Event int
 
 const (
-	EventGameStateChange Event = iota
-	EventLobbyStateChange
-	EventClientStateChange
+	EventGameStateChange   Event = iota // Clients associated with an in-progress game should fetch updated state
+	EventLobbyStateChange               // Clients in the lobby should refetch updated state
+	EventClientStateChange              // Client connection state updated
 )
 
 type Client struct {
@@ -85,6 +85,8 @@ func (n Notification) String() string {
 	}
 	return "unknown"
 }
+
+var lobbyNotification = Notification{Event: EventLobbyStateChange, ForID: noID}
 
 // Hub holds the state of all clients and games. Methods are safe to call concurrently.
 type Hub struct {
@@ -145,7 +147,8 @@ func (h *Hub) clientsInGame(gameID int64) []int64 {
 	return clients
 }
 
-// startGameIfAllClientsReady starts the game if all clients are ready. Returns true if the game was started, false otherwise. The lock should be held by the caller.
+// startGameIfAllClientsReady starts the game if all clients are ready.
+// Returns true if the game was started, false otherwise. The lock should be held by the caller.
 func (h *Hub) startGameIfAllClientsReady(game *Game) bool {
 	if game.State != GameStateJoinable && game.State != GameStateFull {
 		return false
@@ -247,7 +250,7 @@ func (h *Hub) DoGarbageCollection() {
 		}
 	}
 
-	for gameID, _ := range h.games {
+	for gameID := range h.games {
 		if _, ok := gamesWithClients[gameID]; !ok {
 			delete(h.games, gameID)
 		}
@@ -259,7 +262,7 @@ func (h *Hub) GetNotifyChan() (int64, <-chan Notification) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	id := rand.Int63()
-	sink := make(chan Notification)
+	sink := make(chan Notification, 3)
 	h.notifySinks[id] = sink
 	return id, sink
 }
@@ -288,32 +291,33 @@ func (h *Hub) NewClient(name string) int64 {
 	}
 	h.clients[client.ID] = client
 	h.broadcast(Notification{Event: EventClientStateChange, ForID: client.ID})
-	h.broadcast(Notification{Event: EventLobbyStateChange})
+	h.broadcast(lobbyNotification)
 	return client.ID
 }
 
-// AssociateClientToNewGame associates a client with a new game in the lobby. Returns true if the client was successfully associated, false otherwise.
-func (h *Hub) AssociateClientToNewGame(clientID int64) bool {
+// AssociateClientToNewGame associates a client with a new game in the lobby. Returns the new game ID and true if the client was successfully associated, false otherwise.
+func (h *Hub) AssociateClientToNewGame(clientID int64) (int64, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	// Lookup and Validate
 	client, ok := h.getClientInState(clientID, ClientStateUnassociated)
 	if !ok {
-		return false
+		return noID, false
 	}
 
-	gameID := rand.Int63()
+	// Update
 	game := &Game{
-		ID:    gameID,
+		ID:    rand.Int63(),
 		State: GameStateJoinable,
 	}
-	h.games[gameID] = game
+	h.games[game.ID] = game
 
 	client.State = ClientStateAssociated
-	client.GameID = gameID
+	client.GameID = game.ID
 	client.index = -1
 
-	h.broadcast(Notification{Event: EventLobbyStateChange})
-	return true
+	h.broadcast(lobbyNotification)
+	return game.ID, true
 }
 
 // AssociateClientToGame associates a client with an existing game. Returns true if the client was successfully associated, false otherwise.
@@ -338,7 +342,7 @@ func (h *Hub) AssociateClientToGame(clientID int64, gameID int64) bool {
 		game.State = GameStateFull
 	}
 
-	h.broadcast(Notification{Event: EventLobbyStateChange})
+	h.broadcast(lobbyNotification)
 	return true
 }
 
@@ -375,7 +379,7 @@ func (h *Hub) UnassociateClient(clientID int64) bool {
 		}
 	}
 
-	h.broadcast(Notification{Event: EventLobbyStateChange})
+	h.broadcast(lobbyNotification)
 	return true
 }
 
@@ -398,7 +402,7 @@ func (h *Hub) ReadyClient(clientID int64) bool {
 	if h.startGameIfAllClientsReady(game) {
 		h.broadcast(Notification{Event: EventGameStateChange, ForID: game.ID})
 	}
-	h.broadcast(Notification{Event: EventLobbyStateChange})
+	h.broadcast(lobbyNotification)
 	return true
 }
 
@@ -414,7 +418,7 @@ func (h *Hub) UnreadyClient(clientID int64) bool {
 
 	// Update
 	client.State = ClientStateAssociated
-	h.broadcast(Notification{Event: EventLobbyStateChange})
+	h.broadcast(lobbyNotification)
 	return true
 }
 
@@ -439,7 +443,7 @@ func (h *Hub) ExitOngoingGame(clientID int64) bool {
 	client.State = ClientStateUnassociated
 	client.GameID = -1
 	client.index = -1
-	h.broadcast(Notification{Event: EventLobbyStateChange})
+	h.broadcast(lobbyNotification)
 
 	return true
 }
@@ -454,11 +458,18 @@ func (h *Hub) ClientDisconnected(clientID int64) bool {
 		return false
 	}
 	switch client.State {
-	case ClientStateUnassociated, ClientStateAssociated, ClientStateReady:
+	case ClientStateUnassociated:
+		h.broadcast(lobbyNotification)
+	case ClientStateAssociated, ClientStateReady:
 		// Update
+		gameID := client.GameID
 		client.GameID = -1
 		client.index = -1
-		h.broadcast(Notification{Event: EventLobbyStateChange})
+		if numLeft := len(h.clientsInGame(gameID)); numLeft == 0 {
+			// last clients left, delete the game
+			delete(h.games, gameID)
+		}
+		h.broadcast(lobbyNotification)
 	case ClientStatePlaying:
 		game, ok := h.getGameInState(client.GameID, GameStateInProgress, GameStateBlocked)
 		if !ok {
@@ -489,13 +500,14 @@ func (h *Hub) ClientReconnected(clientID int64) bool {
 	}
 
 	// Update
+	client.disconnectedSince = time.Time{}
 	h.broadcast(Notification{Event: EventClientStateChange, ForID: client.ID})
 	game, ok := h.getGameInState(client.GameID, GameStateInProgress, GameStateBlocked)
 	if !ok {
 		client.State = ClientStateUnassociated
 		client.GameID = noID
 		client.index = -1
-		h.broadcast(Notification{Event: EventLobbyStateChange})
+		h.broadcast(lobbyNotification)
 		return true
 	}
 	client.State = ClientStatePlaying
