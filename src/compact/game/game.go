@@ -22,14 +22,14 @@ const (
 // Game is the compact procedural controller (build / operate loop) with fixed-size state.
 type Game struct {
 	phase           phase
-	Status          core.GameStatus
-	Reason          core.LossCondition
-	Round           int32
-	CarbonEmissions int32
-	NumPlayers      int32
-	Players         [cparams.MaxPlayers]Player
-	TakeoverPool    assets.AssetMix
-	LastSnapshot    Snapshot
+	Status          core.GameStatus            `joulequestwasm:"export,enum"`
+	Reason          core.LossCondition         `joulequestwasm:"export,enum"`
+	Round           int32                      `joulequestwasm:"export"`
+	CarbonEmissions int32                      `joulequestwasm:"export"`
+	NumPlayers      int32                      `joulequestwasm:"export"`
+	Players         [cparams.MaxPlayers]Player `joulequestwasm:"nest,index=playerIndex"`
+	TakeoverPool    assets.AssetMix            `joulequestwasm:"nest"`
+	LastSnapshot    Snapshot                   `joulequestwasm:"nest"`
 	Params          cparams.CompactParams
 	// PCG RNG for operate-phase randomness
 	pcg randv2.PCG

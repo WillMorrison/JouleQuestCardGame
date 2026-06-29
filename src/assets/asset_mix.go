@@ -7,11 +7,11 @@ import (
 
 // AssetMix for calculating the price volatility and grid stability
 type AssetMix struct {
-	Renewables         int
-	BatteriesArbitrage int
-	BatteriesCapacity  int
-	FossilsWholesale   int
-	FossilsCapacity    int
+	Renewables         int `joulequestwasm:"export"`
+	BatteriesArbitrage int `joulequestwasm:"export"`
+	BatteriesCapacity  int `joulequestwasm:"export"`
+	FossilsWholesale   int `joulequestwasm:"export"`
+	FossilsCapacity    int `joulequestwasm:"export"`
 }
 
 // AddOneAsset adds an asset of the given type to the AssetMix, using the default operation mode.

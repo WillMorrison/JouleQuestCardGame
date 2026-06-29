@@ -109,6 +109,20 @@ func (as AnnotatedDecl) FuncSignature() FuncSignature {
 	return fs
 }
 
+type TaggedField struct {
+	Name      string
+	Tag       string
+	export    bool         // Generate scalar getter
+	set       bool         // Generate scalar setter
+	enum      *ast.Ident   // Generate enum wrapper for the setter arg or getter result
+	index     string       // Generate an index argument with this name
+	indexEnum *ast.Ident   // The index argument should be this enum type
+	nest      TaggedStruct // Nested structures with tagged fields
+
+	pkg   *packages.Package
+	field *ast.Field
+}
+
 func directivesFromComments(cGroup *ast.CommentGroup) []ast.Directive {
 	if cGroup == nil {
 		return nil
@@ -122,27 +136,68 @@ func directivesFromComments(cGroup *ast.CommentGroup) []ast.Directive {
 	return directives
 }
 
-func annotatedDeclsFromPackage(pkg *packages.Package) []AnnotatedDecl {
-	var annotatedDecls []AnnotatedDecl
+type TaggedStruct struct {
+	Ident        *ast.Ident
+	TaggedFields []TaggedField
+}
+
+func TaggedStructFromTypeSpec(ts *ast.TypeSpec, pkg *packages.Package) TaggedStruct {
+	ident := ts.Name
+	var taggedFields []TaggedField
+	if ts.Type.(*ast.StructType).Fields == nil {
+		return TaggedStruct{}
+	}
+	for _, field := range ts.Type.(*ast.StructType).Fields.List {
+		if field.Tag != nil && field.Tag.Kind == token.STRING {
+			tag := field.Tag.Value
+			taggedFields = append(taggedFields, TaggedField{Name: field.Names[0].Name, Tag: tag, pkg: pkg, field: field})
+		}
+	}
+	if len(taggedFields) == 0 {
+		return TaggedStruct{}
+	}
+	return TaggedStruct{Ident: ident, TaggedFields: taggedFields}
+}
+
+type Info struct {
+	Decls         []AnnotatedDecl
+	TaggedStructs []TaggedStruct
+}
+
+func packageInfo(pkg *packages.Package) Info {
+	var info Info
 	for _, astFile := range pkg.Syntax {
 		for _, decl := range astFile.Decls {
 			switch d := decl.(type) {
 			case *ast.GenDecl:
-				directives := directivesFromComments(d.Doc)
-				if len(directives) == 0 {
-					continue
+				if d.Tok == token.CONST {
+					directives := directivesFromComments(d.Doc)
+					if len(directives) == 0 {
+						continue
+					}
+					info.Decls = append(info.Decls, AnnotatedDecl{decl, directives, pkg})
+				} else if d.Tok == token.TYPE {
+					for _, spec := range d.Specs {
+						if ts, ok := spec.(*ast.TypeSpec); ok {
+							if _, ok := ts.Type.(*ast.StructType); ok {
+								tagged := TaggedStructFromTypeSpec(ts, pkg)
+								if tagged.TaggedFields != nil {
+									info.TaggedStructs = append(info.TaggedStructs, tagged)
+								}
+							}
+						}
+					}
 				}
-				annotatedDecls = append(annotatedDecls, AnnotatedDecl{decl, directives, pkg})
 			case *ast.FuncDecl:
 				directives := directivesFromComments(d.Doc)
 				if len(directives) == 0 {
 					continue
 				}
-				annotatedDecls = append(annotatedDecls, AnnotatedDecl{decl, directives, pkg})
+				info.Decls = append(info.Decls, AnnotatedDecl{decl, directives, pkg})
 			}
 		}
 	}
-	return annotatedDecls
+	return info
 }
 
 func main() {
@@ -158,19 +213,20 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var allAnnotatedDecls []AnnotatedDecl
+	var allInfo Info
 	packages.Visit(
 		pkgs,
 		func(pkg *packages.Package) bool {
 			return strings.HasPrefix(pkg.PkgPath, "github.com/WillMorrison/JouleQuestCardGame")
 		},
 		func(pkg *packages.Package) {
-			annotatedDecls := annotatedDeclsFromPackage(pkg)
-			allAnnotatedDecls = append(allAnnotatedDecls, annotatedDecls...)
+			info := packageInfo(pkg)
+			allInfo.Decls = append(allInfo.Decls, info.Decls...)
+			allInfo.TaggedStructs = append(allInfo.TaggedStructs, info.TaggedStructs...)
 		},
 	)
 
-	for _, annotatedDecl := range allAnnotatedDecls {
+	for _, annotatedDecl := range allInfo.Decls {
 		fmt.Println(annotatedDecl.Position().String())
 		for _, directive := range annotatedDecl.directives {
 			fmt.Printf("//%s:%s %s\n", directive.Tool, directive.Name, directive.Args)
@@ -182,6 +238,12 @@ func main() {
 			}
 		case *ast.FuncDecl:
 			fmt.Println("func", annotatedDecl.FuncSignature().String())
+		}
+	}
+	for _, taggedStruct := range allInfo.TaggedStructs {
+		fmt.Println(taggedStruct.Ident.Name)
+		for _, taggedField := range taggedStruct.TaggedFields {
+			fmt.Println("  ", taggedField.Name, taggedField.Tag)
 		}
 	}
 }
